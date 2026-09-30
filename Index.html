@@ -93,7 +93,7 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radiu
    (not /dev). Test it first by opening it in a browser tab - it
    should show: {"ok":true,"app":"Jus Music API"}
    =================================================================== */
-const API_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
+const API_URL = "https://script.google.com/macros/s/AKfycbx__pPoUcKktHd7j78BYa-6Zbxo3WnFfQpHKCW1CuM-4eDRcfTw_5qz5IeLBVY1Jf5f6Q/exec";
 
 const $ = id => document.getElementById(id), audio = $("audio");
 const LS = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}, set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}} };
