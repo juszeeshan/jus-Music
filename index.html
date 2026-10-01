@@ -3014,7 +3014,30 @@ function sendActivity(
 /* =====================================================
    PLAY SONG
 ===================================================== */
+let directTrying=false;
+const DIRECT=id=>"https://drive.usercontent.google.com/download?id="+encodeURIComponent(id)+"&export=download&confirm=t";
 
+function tryDirect(s,myLoadId){ // stream straight from Drive; resolves false if it can't start in 8s
+  return new Promise(resolve=>{
+    let done=false;
+    const finish=ok=>{
+      if(done)return;done=true;
+      clearTimeout(timer);
+      au.removeEventListener("playing",good);
+      au.removeEventListener("error",bad);
+      directTrying=false;
+      resolve(ok);
+    };
+    const good=()=>finish(true),bad=()=>finish(false);
+    const timer=setTimeout(()=>finish(false),8000);
+    directTrying=true;
+    au.addEventListener("playing",good);
+    au.addEventListener("error",bad);
+    au.src=DIRECT(s.fileId);
+    au.play().catch(()=>finish(false));
+  });
+}
+  
 async function play(s){
 
   if(!s)return;
@@ -3116,7 +3139,14 @@ async function play(s){
 
 
   refresh();
-
+    if(await tryDirect(s,myLoadId)){
+    if(myLoadId!==loadId)return;
+    $("status").textContent="Playing";
+    sendActivity("PLAY",s.title+" — "+s.artist);
+    return;
+   }
+  if(myLoadId!==loadId)return;
+  au.pause();au.removeAttribute("src");au.load();
 
   try{
 
@@ -3446,19 +3476,10 @@ au.onended=()=>{
 
 
 au.onerror=()=>{
-
-  if(
-    now&&
-    playWanted
-  ){
-
-    $("status").textContent=
-      "Audio format not supported";
-
+  if(now&&playWanted&&!directTrying){
+    $("status").textContent="Audio format not supported";
   }
-
 };
-
 
 /* =====================================================
    NEXT / PREVIOUS BUTTONS
