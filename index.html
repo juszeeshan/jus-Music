@@ -688,6 +688,26 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <button id="go" class="pbtn">Upload</button><button id="cl" class="pbtn alt">Close</button>
 </div></dialog>
 <audio id="audio" preload="none"></audio>
+
+<dialog id="accountDlg"><div class="card account-card">
+<h2 style="font-size:20px">Account</h2>
+<div class="small-note" id="accountInfo"></div>
+<input id="newUsername" class="in" placeholder="New username" autocomplete="username" autocapitalize="none">
+<input id="currentPassword" class="in" type="password" placeholder="Current password" autocomplete="current-password">
+<div id="accountMsg" class="small-note"></div>
+<button id="saveAccount" class="pbtn">Change username</button>
+<button id="closeAccount" class="pbtn alt">Close</button>
+</div></dialog>
+<dialog id="forgotDlg"><div class="card account-card">
+<h2 style="font-size:20px">Reset password</h2>
+<div class="small-note">Use the recovery code you received when the account was created.</div>
+<input id="fu" class="in" placeholder="Username" autocapitalize="none">
+<input id="fr" class="in" placeholder="Recovery code" autocapitalize="characters">
+<input id="fp" class="in" type="password" placeholder="New password" autocomplete="new-password">
+<div id="fm" class="small-note"></div>
+<button id="doForgot" class="pbtn">Reset password</button>
+<button id="closeForgot" class="pbtn alt">Close</button>
+</div></dialog>
 <script>
 // >>> PASTE YOUR APPS SCRIPT WEB APP URL BETWEEN THE QUOTES <<<
 const API = "https://script.google.com/macros/s/AKfycbx4gweauM57S973B6IRLV8CAHwBx3w94eKyLg6aV6OfrwAU7V9erESaJ4gfsvXcZp_D/exec";
@@ -993,23 +1013,4 @@ $("go").onclick=async()=>{
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
 if(token)start();else $("auth").classList.remove("hide");
 </script>
-<dialog id="accountDlg"><div class="card account-card">
-<h2 style="font-size:20px">Account</h2>
-<div class="small-note" id="accountInfo"></div>
-<input id="newUsername" class="in" placeholder="New username" autocomplete="username" autocapitalize="none">
-<input id="currentPassword" class="in" type="password" placeholder="Current password" autocomplete="current-password">
-<div id="accountMsg" class="small-note"></div>
-<button id="saveAccount" class="pbtn">Change username</button>
-<button id="closeAccount" class="pbtn alt">Close</button>
-</div></dialog>
-<dialog id="forgotDlg"><div class="card account-card">
-<h2 style="font-size:20px">Reset password</h2>
-<div class="small-note">Use the recovery code you received when the account was created.</div>
-<input id="fu" class="in" placeholder="Username" autocapitalize="none">
-<input id="fr" class="in" placeholder="Recovery code" autocapitalize="characters">
-<input id="fp" class="in" type="password" placeholder="New password" autocomplete="new-password">
-<div id="fm" class="small-note"></div>
-<button id="doForgot" class="pbtn">Reset password</button>
-<button id="closeForgot" class="pbtn alt">Close</button>
-</div></dialog>
 </body></html>
