@@ -680,7 +680,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <audio id="audio" preload="none"></audio>
 <script>
 // >>> PASTE YOUR APPS SCRIPT WEB APP URL BETWEEN THE QUOTES <<<
-const API = "https://script.google.com/macros/s/AKfycbzT9-s1Yv3JMNTkpuMSbdQF2DubBlCsRQRG6w3-Pp7yLnF3WGi39d9FJUCGmmN4vDDr/exec";
+const API = "https://script.google.com/macros/s/AKfycbwZJaJkhbIP6-z2GdOFbqbJAp3hWH3qhyYy66aJRmh1uDIYs0u5h9QYiaziQT_TwnH2/exec";
 
 const LANGS=["Telugu","Hindi","Tamil","English","Other"];
 const GENRES=["Pop","Melody","Folk","Rock","Classical","Devotional","Hip-hop","Romantic","Party","Other"];
@@ -752,18 +752,32 @@ $("songs").onclick=async e=>{
 };
 
 /* player */
-function play(s){
-  if(!s)return;now=s;
-  au.src="https://drive.google.com/uc?export=download&id="+s.fileId;
-  au.play().catch(()=>{});
-  $("nowPlaying").textContent=s.title+" — "+s.artist;$("status").textContent="Playing";
+let loadId=0,blobUrl=null;
+async function play(s){
+  if(!s)return;now=s;const id=++loadId;
+  $("nowPlaying").textContent=s.title+" — "+s.artist;$("status").textContent="Loading...";
   rec=[s.id,...rec.filter(x=>x!==s.id)].slice(0,30);localStorage.setItem("jmRec_"+me.name,JSON.stringify(rec));
   if("mediaSession"in navigator){
     navigator.mediaSession.metadata=new MediaMetadata({title:s.title,artist:s.artist,album:"Jus Music"});
     navigator.mediaSession.setActionHandler("nexttrack",()=>step(1));
     navigator.mediaSession.setActionHandler("previoustrack",()=>step(-1));
   }
-  const keep=folder;refresh();
+  refresh();
+  try{
+    const chunks=[];let n=1;
+    for(let p=0;p<n;p++){
+      const r=await fetch(`${API}?action=audio&token=${encodeURIComponent(token)}&id=${s.id}&p=${p}`);
+      const j=await r.json();
+      if(id!==loadId)return;
+      if(j.auth){logout();return}
+      if(!j.ok)throw new Error(j.error);
+      n=j.parts;chunks.push(Uint8Array.from(atob(j.data),c=>c.charCodeAt(0)));
+      $("status").textContent="Loading "+Math.round((p+1)/n*100)+"%";
+    }
+    if(blobUrl)URL.revokeObjectURL(blobUrl);
+    blobUrl=URL.createObjectURL(new Blob(chunks,{type:s.mime||"audio/mpeg"}));
+    au.src=blobUrl;await au.play();$("status").textContent="Playing";
+  }catch(e){if(id===loadId)$("status").textContent="Can't play: "+(e.message||e)}
 }
 function step(dir){
   if(!queue.length)return;
@@ -775,7 +789,7 @@ $("nextBtn").onclick=()=>step(1);$("prevBtn").onclick=()=>step(-1);
 $("playBtn").onclick=()=>{if(!now)step(1);else au.paused?au.play():au.pause()};
 au.onplay=()=>$("playIcon").textContent="❚❚";au.onpause=()=>$("playIcon").textContent="▶";
 au.onended=()=>{if(repeat==="one"){au.currentTime=0;au.play()}else step(1)};
-au.onerror=()=>{if(now){$("status").textContent="Can't play, skipping...";setTimeout(()=>step(1),1500)}};
+au.onerror=()=>{if(now&&blobUrl)$("status").textContent="Audio format not supported"};
 $("shuffleBtn").onclick=e=>{shuffle=!shuffle;e.currentTarget.classList.toggle("active",shuffle)};
 $("repeatBtn").onclick=()=>{repeat=repeat==="all"?"one":"all";$("repeatIcon").textContent=repeat==="all"?"↻":"↻1";$("repeatBtn").title=repeat==="all"?"Repeat All":"Repeat One"};
 const fmt=t=>isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
@@ -807,7 +821,7 @@ $("file").onchange=e=>{
 $("go").onclick=async()=>{
   const f=$("file").files[0],us=$("us");
   if(!f){us.textContent="Choose an audio file";return}
-  if(f.size>20*1048576){us.textContent="Max 20 MB";return}
+  if(f.size>15*1048576){us.textContent="Max 15 MB";return}
   $("go").disabled=true;us.textContent="Reading file...";
   const buf=await f.arrayBuffer();
   const hash=[...new Uint8Array(await crypto.subtle.digest("SHA-256",buf))].map(b=>b.toString(16).padStart(2,"0")).join("");
