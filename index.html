@@ -634,6 +634,47 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 .small-note{font-size:12px;color:var(--text-soft);line-height:1.45;text-align:center}
 .recovery-code{font-size:24px;letter-spacing:3px;text-align:center;padding:14px;border-radius:12px;background:var(--surface-3);font-weight:800}
 .link-btn{border:0;background:none;color:var(--accent);cursor:pointer;font-size:14px;padding:5px}
+
+/* =====================================================
+   CLEAN LIBRARY / MOBILE HEADER / PLAYLISTS
+===================================================== */
+.header-row{gap:10px}
+.header-actions{margin-left:auto;flex-shrink:0}
+.mobile-menu-btn{display:none}
+.library-bar{display:flex;align-items:center;gap:10px;margin:4px 0 18px;position:relative}
+.library-select,.playlist-open-btn{border:1px solid var(--border);background:linear-gradient(145deg,var(--surface-3),var(--surface-2));color:var(--text);border-radius:14px;padding:11px 15px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.library-select{font-weight:650;min-width:180px;text-align:left}
+.playlist-open-btn{margin-left:auto}
+.library-menu{position:absolute;top:50px;left:0;z-index:40;min-width:230px;max-height:60vh;overflow:auto;display:none;padding:8px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);box-shadow:var(--shadow)}
+.library-menu.open{display:block}
+.library-menu .folder-btn{display:block;width:100%;text-align:left;border:0;background:transparent;box-shadow:none;border-radius:10px;padding:11px 12px}
+.library-menu .folder-btn.active{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff}
+.playlist-panel{display:none;margin:0 0 22px}
+.playlist-panel.open{display:block}
+.playlist-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.playlist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.playlist-card{padding:15px;border:1px solid var(--border);border-radius:16px;background:linear-gradient(145deg,var(--surface-2),var(--surface));cursor:pointer;min-height:90px}
+.playlist-card:hover{border-color:rgba(155,92,255,.45)}
+.playlist-card strong{display:block;font-size:16px;margin-bottom:5px}.playlist-card span{font-size:12px;color:var(--text-soft)}
+.playlist-delete{float:right;border:0;background:transparent;color:var(--text-soft);cursor:pointer;font-size:17px}
+.add-playlist-btn{border:1px solid var(--border);background:var(--surface-3);color:var(--text);border-radius:11px;padding:9px 12px;cursor:pointer}
+.playlist-add{width:34px;height:34px;font-size:19px}
+.mobile-menu{display:none;position:absolute;right:14px;top:66px;z-index:45;width:210px;padding:8px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);box-shadow:var(--shadow)}
+.mobile-menu.open{display:grid;gap:4px}.mobile-menu button{border:0;background:transparent;color:var(--text);text-align:left;padding:12px;border-radius:10px;cursor:pointer}.mobile-menu button:hover{background:var(--surface-3)}
+@media(max-width:700px){
+  header{padding:12px 12px 11px}
+  .header-row{min-height:46px}
+  .brand-title{font-size:21px}.brand-icon{font-size:23px}
+  .header-actions .desktop-action{display:none}
+  .mobile-menu-btn{display:flex}
+  .header-btn{width:40px;height:40px}
+  .header-icon{font-size:19px}
+  .library-bar{margin-top:2px}
+  .library-select{min-width:0;flex:1}
+  .playlist-open-btn{margin-left:0;padding:11px 13px}
+  .playlist-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:380px){.brand-title{font-size:19px}.header-actions{gap:5px}.playlist-grid{grid-template-columns:1fr}.playlist-open-btn{font-size:13px;padding:10px}.library-select{font-size:14px}}
 </style></head><body>
 <div id="auth" class="hide"><div class="card">
 <h2>♫ Jus Music</h2>
@@ -650,17 +691,34 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div class="brand"><div class="brand-icon">♫</div><div class="brand-title">Jus Music</div></div>
 <div class="header-actions">
 <button id="searchBtn" class="header-btn" type="button" title="Search"><span class="header-icon">⌕</span></button>
+<button id="mobileMenuBtn" class="header-btn mobile-menu-btn" type="button" title="More"><span class="header-icon">⋮</span></button>
+<div class="desktop-action header-actions" style="gap:8px">
 <button id="syncBtn" class="header-btn" type="button" title="Refresh library"><span class="header-icon">⟳</span></button>
 <button id="upBtn" class="header-btn" type="button" title="Upload"><span class="header-icon">⇪</span></button>
 <button id="themeBtn" class="header-btn" type="button" title="Theme"><span id="themeIcon" class="header-icon">☼</span></button>
 <button id="accountBtn" class="header-btn" type="button" title="Account"><span class="header-icon">♙</span></button>
 <button id="outBtn" class="header-btn" type="button" title="Bye"><span class="header-icon">↪</span></button>
-</div></div>
+</div></div></div>
+<div id="mobileMenu" class="mobile-menu">
+<button id="mSync" type="button">⟳ &nbsp; Refresh library</button>
+<button id="mUpload" type="button">⇪ &nbsp; Upload song</button>
+<button id="mTheme" type="button">☼ &nbsp; Change theme</button>
+<button id="mAccount" type="button">♙ &nbsp; Account</button>
+<button id="mLogout" type="button">↪ &nbsp; Bye</button>
+</div>
 <div id="searchWrap" class="search-wrap"><input id="search" type="search" placeholder="Search songs..." autocomplete="off" spellcheck="false"></div>
 </header>
 <main>
-<div class="section-title">Folders</div><div id="folders"></div>
-<div class="section-title">Songs</div><div id="songs"></div>
+<div class="library-bar">
+<button id="libraryBtn" class="library-select" type="button">Library ▾</button>
+<div id="libraryMenu" class="library-menu"><div id="folders"></div></div>
+<button id="playlistOpenBtn" class="playlist-open-btn" type="button">♫ Playlists</button>
+</div>
+<div id="playlistPanel" class="playlist-panel">
+  <div class="playlist-head"><div class="section-title" style="margin:0">Your Playlists</div><button id="newPlaylistBtn" class="add-playlist-btn">＋ New playlist</button></div>
+  <div id="playlistGrid" class="playlist-grid"></div>
+</div>
+<div class="section-title" id="songsTitle">Songs</div><div id="songs"></div>
 </main>
 <section id="player"><div class="player-inner">
 <div id="nowPlaying">Nothing playing</div>
@@ -708,6 +766,14 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <button id="doForgot" class="pbtn">Reset password</button>
 <button id="closeForgot" class="pbtn alt">Close</button>
 </div></dialog>
+<dialog id="playlistDlg"><div class="card account-card">
+<h2 style="font-size:20px">Add to playlist</h2>
+<div id="playlistChoices"></div>
+<input id="newPlaylistName" class="in" placeholder="New playlist name">
+<div id="playlistMsg" class="small-note"></div>
+<button id="createPlaylistFromSong" class="pbtn">Create playlist</button>
+<button id="closePlaylistDlg" class="pbtn alt">Close</button>
+</div></dialog>
 <script>
 // >>> PASTE YOUR APPS SCRIPT WEB APP URL BETWEEN THE QUOTES <<<
 const API = "https://script.google.com/macros/s/AKfycbx4gweauM57S973B6IRLV8CAHwBx3w94eKyLg6aV6OfrwAU7V9erESaJ4gfsvXcZp_D/exec";
@@ -717,7 +783,7 @@ const GENRES=["Pop","Melody","Folk","Rock","Classical","Devotional","Hip-hop","R
 const $=id=>document.getElementById(id), au=$("audio");
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ls=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
-let token=localStorage.getItem("jmToken"),me=null,songs=[],queue=[],now=null,folder="All Songs",q="",shuffle=false,repeat="all",fav=[],rec=[];
+let token=localStorage.getItem("jmToken"),me=null,songs=[],queue=[],now=null,folder="All Songs",q="",shuffle=false,repeat="all",fav=[],rec=[],playlists=[],playlistView=null,playlistSong=null;
 
 async function call(action,data={}){
   if(API.includes("PASTE_")) return {ok:false,error:"Paste your Apps Script URL into index.html (const API)"};
@@ -769,7 +835,7 @@ $("outBtn").onclick=logout;
 async function start(){
   const j=await call("list");
   if(!j.ok){$("err").textContent=j.error||"";logout();return}
-  me=j.me;songs=j.songs;fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);
+  me=j.me;songs=j.songs;fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);loadPlaylists();
   $("auth").classList.add("hide");$("app").classList.remove("hide");
   refresh();
 }
@@ -787,40 +853,63 @@ $("saveAccount").onclick=async()=>{
   if(!j.ok){msg.textContent=j.error;return}
   const oldName=me.name;
   token=j.token;localStorage.setItem("jmToken",token);me=j.user;
-  const oldFav=localStorage.getItem("jmFav_"+oldName),oldRec=localStorage.getItem("jmRec_"+oldName);
+  const oldFav=localStorage.getItem("jmFav_"+oldName),oldRec=localStorage.getItem("jmRec_"+oldName),oldPl=localStorage.getItem("jmPlaylists_"+oldName);
   if(oldFav) localStorage.setItem("jmFav_"+me.name,oldFav);
   if(oldRec) localStorage.setItem("jmRec_"+me.name,oldRec);
-  localStorage.removeItem("jmFav_"+oldName);localStorage.removeItem("jmRec_"+oldName);
+  if(oldPl) localStorage.setItem("jmPlaylists_"+me.name,oldPl);
+  localStorage.removeItem("jmFav_"+oldName);localStorage.removeItem("jmRec_"+oldName);localStorage.removeItem("jmPlaylists_"+oldName);
   fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);
   $("accountDlg").close();refresh();$("status").textContent="Username changed to "+me.name;
 };
 /* folders + songs */
+function loadPlaylists(){
+  playlists=ls("jmPlaylists_"+(me?.name||""),[]);
+  playlists=Array.isArray(playlists)?playlists:[];
+}
+function savePlaylists(){localStorage.setItem("jmPlaylists_"+me.name,JSON.stringify(playlists));}
+function renderPlaylists(){
+  const g=$("playlistGrid");
+  if(!playlists.length){g.innerHTML='<div class="empty">No playlists yet. Create one to organize your music.</div>';return}
+  g.innerHTML=playlists.map((p,i)=>`<div class="playlist-card" data-pl="${i}"><button class="playlist-delete" data-pdel="${i}" title="Delete playlist">×</button><strong>♫ ${esc(p.name)}</strong><span>${p.ids.length} song${p.ids.length===1?'':'s'}</span></div>`).join("");
+}
 function refresh(){
-  const L=[...new Set(songs.map(s=>s.language))],G=[...new Set(songs.map(s=>s.genre))].filter(g=>!L.includes(g));
+  loadPlaylists();
+  const L=[...new Set(songs.map(s=>s.language).filter(Boolean))],G=[...new Set(songs.map(s=>s.genre).filter(Boolean))].filter(g=>!L.includes(g));
   const names=["All Songs","♥ Favorites","Recent","🔒 Personal",...L,...G];
   $("folders").innerHTML=names.map(n=>`<button class="folder-btn ${n===folder?"active":""}" data-f="${esc(n)}">${esc(n)}</button>`).join("");
+  $("libraryBtn").textContent=(playlistView!==null?"Library ▾":folder)+" ▾";
+  renderPlaylists();
   const t=q.toLowerCase();
   let a=songs.filter(s=>!t||(s.title+" "+s.artist).toLowerCase().includes(t));
-  if(folder==="♥ Favorites")a=a.filter(s=>fav.includes(s.id));
-  else if(folder==="Recent")a=rec.map(id=>a.find(s=>s.id===id)).filter(Boolean);
-  else if(folder==="🔒 Personal")a=a.filter(s=>s.visibility!=="shared");
-  else if(folder!=="All Songs")a=a.filter(s=>s.language===folder||s.genre===folder);
+  if(playlistView!==null){
+    const p=playlists[playlistView];
+    a=p?songs.filter(s=>p.ids.includes(s.id)):[];
+    $("songsTitle").textContent=p?"Playlist · "+p.name:"Playlist";
+  }else{
+    if(folder==="♥ Favorites")a=a.filter(s=>fav.includes(s.id));
+    else if(folder==="Recent")a=rec.map(id=>a.find(s=>s.id===id)).filter(Boolean);
+    else if(folder==="🔒 Personal")a=a.filter(s=>s.visibility!=="shared");
+    else if(folder!=="All Songs")a=a.filter(s=>s.language===folder||s.genre===folder);
+    $("songsTitle").textContent="Songs";
+  }
   queue=a.slice();
-  if(folder!=="Recent")queue.sort((x,y)=>x.added-y.added);
+  if(folder!=="Recent"&&playlistView===null)queue.sort((x,y)=>x.added-y.added);
   $("songs").innerHTML=queue.length?queue.map((s,i)=>{
     const can=s.owner===me.name||me.role==="admin";
     return `<div class="song-row ${now&&now.id===s.id?"active":""}" data-id="${s.id}">
     <div class="song-number">${i+1}</div>
     <div class="song-info"><span class="song-name">${esc(s.title)}</span><span class="song-meta">${esc(s.artist)} · ${s.language} · ${s.genre}${s.visibility==="private"?" · 🔒 only me":s.visibility==="admin"?" · 🛡 admins":""}</span></div>
-    <button class="favorite-btn ${fav.includes(s.id)?"active":""}" data-fav="${s.id}">${fav.includes(s.id)?"♥":"♡"}</button>
-    ${can?`<button class="favorite-btn" data-vis="${s.id}" title="Change sharing">⇄</button><button class="favorite-btn" data-del="${s.id}">✕</button>`:""}</div>`}).join(""):'<div class="empty">No songs found</div>';
+    <button class="favorite-btn ${fav.includes(s.id)?"active":""}" data-fav="${s.id}" title="Favorite">${fav.includes(s.id)?"♥":"♡"}</button>
+    <button class="favorite-btn playlist-add" data-addpl="${s.id}" title="Add to playlist">＋</button>
+    ${can?`<button class="favorite-btn" data-vis="${s.id}" title="Change sharing">⇄</button><button class="favorite-btn" data-del="${s.id}" title="Delete">✕</button>`:""}</div>`}).join(""):'<div class="empty">No songs found</div>';
 }
-$("folders").onclick=e=>{const f=e.target.dataset.f;if(f){folder=f;refresh()}};
+$("folders").onclick=e=>{const f=e.target.dataset.f;if(f){folder=f;playlistView=null;$("playlistPanel").classList.remove("open");$("libraryMenu").classList.remove("open");refresh()}};
 $("search").oninput=e=>{q=e.target.value;refresh()};
 $("syncBtn").onclick=async()=>{$("status").textContent="Refreshing...";const j=await call("list",{force:true});if(j.ok){songs=j.songs;refresh();$("status").textContent="Library updated"}else $("status").textContent=j.error};
 $("searchBtn").onclick=()=>{$("searchWrap").classList.toggle("open");if($("searchWrap").classList.contains("open"))$("search").focus()};
 $("songs").onclick=async e=>{
   const d=e.target.dataset;
+  if(d.addpl){openPlaylistDialog(d.addpl);return}
   if(d.fav){fav=fav.includes(d.fav)?fav.filter(x=>x!==d.fav):[...fav,d.fav];localStorage.setItem("jmFav_"+me.name,JSON.stringify(fav));refresh();return}
   if(d.vis){
     const s=songs.find(x=>x.id===d.vis),o=["private","admin","shared"],nv=o[(o.indexOf(s.visibility)+1)%3];
@@ -835,6 +924,39 @@ $("songs").onclick=async e=>{
   if(row)play(songs.find(s=>s.id===row.dataset.id));
 };
 
+/* playlists */
+function openPlaylistDialog(songId){
+  playlistSong=songId;
+  $("newPlaylistName").value="";$("playlistMsg").textContent="";
+  const choices=$("playlistChoices");
+  choices.innerHTML=playlists.length?playlists.map((p,i)=>`<button class="pbtn alt" style="text-align:left" data-pickpl="${i}">♫ ${esc(p.name)}${p.ids.includes(songId)?" ✓":""}</button>`).join(""):"<div class=\"small-note\">No playlists yet.</div>";
+  $("playlistDlg").showModal();
+}
+$("playlistChoices").onclick=e=>{
+  const i=e.target.dataset.pickpl;if(i===undefined)return;
+  const p=playlists[Number(i)];if(!p.ids.includes(playlistSong))p.ids.push(playlistSong);savePlaylists();renderPlaylists();$("playlistMsg").textContent="Added to "+p.name;setTimeout(()=>$("playlistDlg").close(),350);
+};
+$("createPlaylistFromSong").onclick=()=>{
+  const name=$("newPlaylistName").value.trim();if(!name){$("playlistMsg").textContent="Enter a playlist name";return}
+  const p={name,ids:playlistSong?[playlistSong]:[]};playlists.push(p);savePlaylists();renderPlaylists();$("playlistDlg").close();
+};
+$("closePlaylistDlg").onclick=()=>$("playlistDlg").close();
+$("newPlaylistBtn").onclick=()=>{
+  const name=prompt("Playlist name:");if(!name||!name.trim())return;
+  playlists.push({name:name.trim(),ids:[]});savePlaylists();renderPlaylists();
+};
+$("playlistGrid").onclick=e=>{
+  const del=e.target.dataset.pdel;
+  if(del!==undefined){if(confirm("Delete this playlist? Songs will not be deleted.")){playlists.splice(Number(del),1);if(playlistView===Number(del))playlistView=null;else if(playlistView!==null&&Number(del)<playlistView)playlistView--;savePlaylists();refresh()}return}
+  const i=e.target.closest(".playlist-card")?.dataset.pl;
+  if(i!==undefined){playlistView=Number(i);folder="All Songs";refresh();$("playlistPanel").classList.add("open");}
+};
+$("playlistOpenBtn").onclick=()=>{
+  const panel=$("playlistPanel");panel.classList.toggle("open");
+  if(panel.classList.contains("open")){playlistView=null;refresh()}
+};
+$("libraryBtn").onclick=()=>$("libraryMenu").classList.toggle("open");
+document.addEventListener("click",e=>{if(!e.target.closest(".library-bar"))$("libraryMenu").classList.remove("open");if(!e.target.closest("header"))$("mobileMenu").classList.remove("open")});
 /* player */
 let loadId=0;
 const cache=new Map(),pend=new Map();
@@ -978,6 +1100,13 @@ function theme(l){document.body.classList.toggle("light",l);$("themeIcon").textC
 $("themeBtn").onclick=()=>theme(!document.body.classList.contains("light"));
 theme(localStorage.getItem("jmTheme")==="light");
 
+/* mobile menu */
+$("mobileMenuBtn").onclick=()=>$("mobileMenu").classList.toggle("open");
+$("mSync").onclick=()=>{$("mobileMenu").classList.remove("open");$("syncBtn").click()};
+$("mUpload").onclick=()=>{$("mobileMenu").classList.remove("open");$("upBtn").click()};
+$("mTheme").onclick=()=>{$("mobileMenu").classList.remove("open");$("themeBtn").click()};
+$("mAccount").onclick=()=>{$("mobileMenu").classList.remove("open");$("accountBtn").click()};
+$("mLogout").onclick=()=>{$("mobileMenu").classList.remove("open");$("outBtn").click()};
 /* upload */
 function guess(t){
   if(/[\u0C00-\u0C7F]/.test(t))return["Telugu",null];if(/[\u0900-\u097F]/.test(t))return["Hindi",null];if(/[\u0B80-\u0BFF]/.test(t))return["Tamil",null];
