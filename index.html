@@ -628,6 +628,12 @@ body.light #player{
 .song-meta{display:block;font-size:12px;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 dialog{border:0;padding:0;background:none;color:var(--text);width:min(420px,94vw)}
 dialog::backdrop{background:rgba(0,0,0,.7)}
+
+/* account / recovery */
+.account-card{width:100%;max-width:430px}
+.small-note{font-size:12px;color:var(--text-soft);line-height:1.45;text-align:center}
+.recovery-code{font-size:24px;letter-spacing:3px;text-align:center;padding:14px;border-radius:12px;background:var(--surface-3);font-weight:800}
+.link-btn{border:0;background:none;color:var(--accent);cursor:pointer;font-size:14px;padding:5px}
 </style></head><body>
 <div id="auth" class="hide"><div class="card">
 <h2>♫ Jus Music</h2>
@@ -636,6 +642,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="err"></div>
 <button id="login" class="pbtn">Login</button>
 <button id="reg" class="pbtn alt">Create account</button>
+<button id="forgotBtn" class="link-btn" type="button">Forgot password?</button>
 </div></div>
 
 <div id="app" class="hide">
@@ -646,7 +653,8 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <button id="syncBtn" class="header-btn" type="button" title="Refresh library"><span class="header-icon">⟳</span></button>
 <button id="upBtn" class="header-btn" type="button" title="Upload"><span class="header-icon">⇪</span></button>
 <button id="themeBtn" class="header-btn" type="button" title="Theme"><span id="themeIcon" class="header-icon">☼</span></button>
-<button id="outBtn" class="header-btn txt" type="button" title="Bye">Logout</button>
+<button id="accountBtn" class="header-btn" type="button" title="Account"><span class="header-icon">♙</span></button>
+<button id="outBtn" class="header-btn" type="button" title="Bye"><span class="header-icon">↪</span></button>
 </div></div>
 <div id="searchWrap" class="search-wrap"><input id="search" type="search" placeholder="Search songs..." autocomplete="off" spellcheck="false"></div>
 </header>
@@ -706,18 +714,66 @@ async function authGo(a){
   $("err").textContent="Please wait...";
   const j=await call(a,{username:$("u").value,password:$("p").value});
   if(!j.ok){$("err").textContent=j.error;return}
-  token=j.token;localStorage.setItem("jmToken",token);start();
+  token=j.token;localStorage.setItem("jmToken",token);
+  if(j.recoveryCode){
+    alert("SAVE YOUR RECOVERY CODE:\n\n"+j.recoveryCode+"\n\nYou will need this if you forget your password.");
+  }
+  start();
 }
-$("login").onclick=()=>authGo("login");$("reg").onclick=()=>authGo("register");
-function logout(){localStorage.removeItem("jmToken");token=null;au.pause();$("app").classList.add("hide");$("auth").classList.remove("hide")}
+$("login").onclick=()=>authGo("login");
+$("reg").onclick=()=>authGo("register");
+$("forgotBtn").onclick=()=>{$("fm").textContent="";$("forgotDlg").showModal()};
+$("closeForgot").onclick=()=>$("forgotDlg").close();
+
+$("doForgot").onclick=async()=>{
+  const fm=$("fm");
+  fm.textContent="Please wait...";
+  const j=await call("forgot",{username:$("fu").value,recoveryCode:$("fr").value,newPassword:$("fp").value});
+  if(!j.ok){fm.textContent=j.error;return}
+  alert("Password changed.\n\nNEW RECOVERY CODE:\n"+j.recoveryCode+"\n\nSave it somewhere safe.");
+  $("forgotDlg").close();
+  token=j.token;localStorage.setItem("jmToken",token);start();
+};
+
+async function logout(){
+  if(token){
+    try{await call("activity",{activityAction:"LOGOUT",detail:"User logged out"});}catch(e){}
+  }
+  localStorage.removeItem("jmToken");token=null;
+  cancelPendingLoad();
+  au.pause();au.removeAttribute("src");au.load();
+  $("app").classList.add("hide");$("auth").classList.remove("hide");
+}
 $("outBtn").onclick=logout;
+
 async function start(){
   const j=await call("list");
   if(!j.ok){$("err").textContent=j.error||"";logout();return}
   me=j.me;songs=j.songs;fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);
-  $("auth").classList.add("hide");$("app").classList.remove("hide");refresh();
+  $("auth").classList.add("hide");$("app").classList.remove("hide");
+  refresh();
 }
 
+$("accountBtn").onclick=()=>{
+  $("accountInfo").textContent="Signed in as "+me.name+(me.role==="admin"?" · admin":"");
+  $("newUsername").value=me.name;$("currentPassword").value="";$("accountMsg").textContent="";
+  $("accountDlg").showModal();
+};
+$("closeAccount").onclick=()=>$("accountDlg").close();
+
+$("saveAccount").onclick=async()=>{
+  const msg=$("accountMsg");msg.textContent="Saving...";
+  const j=await call("changeUsername",{newUsername:$("newUsername").value,password:$("currentPassword").value});
+  if(!j.ok){msg.textContent=j.error;return}
+  const oldName=me.name;
+  token=j.token;localStorage.setItem("jmToken",token);me=j.user;
+  const oldFav=localStorage.getItem("jmFav_"+oldName),oldRec=localStorage.getItem("jmRec_"+oldName);
+  if(oldFav) localStorage.setItem("jmFav_"+me.name,oldFav);
+  if(oldRec) localStorage.setItem("jmRec_"+me.name,oldRec);
+  localStorage.removeItem("jmFav_"+oldName);localStorage.removeItem("jmRec_"+oldName);
+  fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);
+  $("accountDlg").close();refresh();$("status").textContent="Username changed to "+me.name;
+};
 /* folders + songs */
 function refresh(){
   const L=[...new Set(songs.map(s=>s.language))],G=[...new Set(songs.map(s=>s.genre))].filter(g=>!L.includes(g));
@@ -760,53 +816,135 @@ $("songs").onclick=async e=>{
 };
 
 /* player */
-let loadId=0;const cache=new Map(),pend=new Map();
-async function getPart(id,p){
-  const r=await fetch(`${API}?action=audio&token=${encodeURIComponent(token)}&id=${id}&p=${p}`),j=await r.json();
-  if(j.auth){logout();throw new Error("Session expired")}
-  if(!j.ok)throw new Error(j.error);return j;
+let loadId=0;
+const cache=new Map(),pend=new Map();
+let loadController=null;
+let playWanted=false;
+
+function cancelPendingLoad(){
+  loadId++;
+  if(loadController){try{loadController.abort()}catch(e){}loadController=null}
+  pend.clear();
 }
-function load(s,prog){ // downloads parts 3 at a time into one temporary blob; keeps the last 3 songs for instant replay
-  if(cache.has(s.id)){const u=cache.get(s.id);cache.delete(s.id);cache.set(s.id,u);return Promise.resolve(u)}
+
+async function getPart(id,p,signal){
+  const r=await fetch(`${API}?action=audio&token=${encodeURIComponent(token)}&id=${id}&p=${p}`,{signal});
+  const j=await r.json();
+  if(j.auth){logout();throw new Error("Session expired")}
+  if(!j.ok)throw new Error(j.error);
+  return j;
+}
+
+async function load(s,prog,signal){
+  if(cache.has(s.id)){
+    const u=cache.get(s.id);cache.delete(s.id);cache.set(s.id,u);
+    return u;
+  }
   if(pend.has(s.id))return pend.get(s.id);
   const pr=(async()=>{
-    const first=await getPart(s.id,0),n=first.parts,out=[first.data];let done=1;prog&&prog(1/n);
-    for(let p=1;p<n;p+=3)await Promise.all([p,p+1,p+2].filter(x=>x<n).map(async x=>{out[x]=(await getPart(s.id,x)).data;done++;prog&&prog(done/n)}));
-    const u=URL.createObjectURL(new Blob(out.map(b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0))),{type:s.mime||"audio/mpeg"}));
+    const first=await getPart(s.id,0,signal),n=first.parts,out=[first.data];let done=1;
+    prog&&prog(1/n);
+    for(let p=1;p<n;p+=3){
+      const jobs=[p,p+1,p+2].filter(k=>k<n).map(async k=>{
+        out[k]=(await getPart(s.id,k,signal)).data;done++;
+        prog&&prog(done/n);
+      });
+      await Promise.all(jobs);
+    }
+    if(signal.aborted)throw new DOMException("Aborted","AbortError");
+    const bytes=out.map(b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0)));
+    const u=URL.createObjectURL(new Blob(bytes,{type:s.mime||"audio/mpeg"}));
     cache.set(s.id,u);
-    while(cache.size>3){const k=cache.keys().next().value;URL.revokeObjectURL(cache.get(k));cache.delete(k)}
+    while(cache.size>3){
+      const k=cache.keys().next().value;
+      URL.revokeObjectURL(cache.get(k));cache.delete(k);
+    }
     return u;
   })().finally(()=>pend.delete(s.id));
-  pend.set(s.id,pr);return pr;
+  pend.set(s.id,pr);
+  return pr;
 }
-function prefetchNext(){if(shuffle||!queue.length||!now)return;const i=queue.findIndex(x=>x.id===now.id),n=queue[(i+1)%queue.length];if(n&&n.id!==now.id)load(n).catch(()=>{})}
+
+function prefetchNext(){
+  if(shuffle||!queue.length||!now)return;
+  const i=queue.findIndex(x=>x.id===now.id),n=queue[(i+1)%queue.length];
+  if(n&&n.id!==now.id){
+    const c=new AbortController();
+    load(n,null,c.signal).catch(()=>{});
+  }
+}
+
+function sendActivity(action,detail){
+  if(!token)return;
+  fetch(API,{method:"POST",body:JSON.stringify({action:"activity",token,activityAction:action,detail}),keepalive:true}).catch(()=>{});
+}
+
 async function play(s){
-  if(!s)return;now=s;const id=++loadId;
-  $("nowPlaying").textContent=s.title+" — "+s.artist;$("status").textContent="Loading...";
-  rec=[s.id,...rec.filter(x=>x!==s.id)].slice(0,30);localStorage.setItem("jmRec_"+me.name,JSON.stringify(rec));
+  if(!s)return;
+  playWanted=true;
+  cancelPendingLoad();
+  const id=loadId;
+  loadController=new AbortController();
+  const signal=loadController.signal;
+
+  now=s;
+  $("nowPlaying").textContent=s.title+" — "+s.artist;
+  $("status").textContent="Loading...";
+  rec=[s.id,...rec.filter(x=>x!==s.id)].slice(0,30);
+  localStorage.setItem("jmRec_"+me.name,JSON.stringify(rec));
   if("mediaSession"in navigator){
     navigator.mediaSession.metadata=new MediaMetadata({title:s.title,artist:s.artist,album:"Jus Music"});
     navigator.mediaSession.setActionHandler("nexttrack",()=>step(1));
     navigator.mediaSession.setActionHandler("previoustrack",()=>step(-1));
   }
   refresh();
+
   try{
-    const u=await load(s,f=>{if(id===loadId)$("status").textContent="Loading "+Math.round(f*100)+"%"});
-    if(id!==loadId)return;
-    au.src=u;await au.play();$("status").textContent="Playing";prefetchNext();
-  }catch(e){if(id===loadId)$("status").textContent="Can't play: "+(e.message||e)}
+    const u=await load(s,f=>{if(id===loadId)$("status").textContent="Loading "+Math.round(f*100)+"%"},signal);
+    if(id!==loadId||!playWanted||signal.aborted)return;
+    au.src=u;
+    await au.play();
+    if(id!==loadId||!playWanted)return;
+    $("status").textContent="Playing";
+    sendActivity("PLAY",s.title+" — "+s.artist);
+    prefetchNext();
+  }catch(e){
+    if(e.name==="AbortError")return;
+    if(id===loadId)$("status").textContent="Can't play: "+(e.message||e);
+  }finally{
+    if(id===loadId)loadController=null;
+  }
 }
+
 function step(dir){
   if(!queue.length)return;
   let i=queue.findIndex(s=>now&&s.id===now.id);
-  i=shuffle&&dir>0?Math.floor(Math.random()*queue.length):(i+dir+queue.length)%queue.length; // 1→2→3→1
+  i=shuffle&&dir>0?Math.floor(Math.random()*queue.length):(i+dir+queue.length)%queue.length;
   play(queue[i]);
 }
-$("nextBtn").onclick=()=>step(1);$("prevBtn").onclick=()=>step(-1);
-$("playBtn").onclick=()=>{if(!now)step(1);else au.paused?au.play():au.pause()};
-au.onplay=()=>$("playIcon").textContent="❚❚";au.onpause=()=>$("playIcon").textContent="▶";
-au.onended=()=>{if(repeat==="one"){au.currentTime=0;au.play()}else step(1)};
-au.onerror=()=>{if(now)$("status").textContent="Audio format not supported"};
+
+$("nextBtn").onclick=()=>{playWanted=true;step(1)};
+$("prevBtn").onclick=()=>{playWanted=true;step(-1)};
+$("playBtn").onclick=()=>{
+  if(!now){playWanted=true;step(1);return}
+  if(au.paused){
+    playWanted=true;
+    if(au.src)au.play().catch(()=>play(now));
+    else play(now);
+  }else{
+    playWanted=false;
+    cancelPendingLoad();
+    au.pause();
+    $("status").textContent="Paused";
+  }
+};
+au.onplay=()=>$("playIcon").textContent="❚❚";
+au.onpause=()=>{
+  $("playIcon").textContent="▶";
+  if(au.readyState>0)$("status").textContent="Paused";
+};
+au.onended=()=>{if(!playWanted)return;if(repeat==="one"){au.currentTime=0;au.play()}else step(1)};
+au.onerror=()=>{if(now&&playWanted)$("status").textContent="Audio format not supported"};
 $("shuffleBtn").onclick=e=>{shuffle=!shuffle;e.currentTarget.classList.toggle("active",shuffle)};
 $("repeatBtn").onclick=()=>{repeat=repeat==="all"?"one":"all";$("repeatIcon").textContent=repeat==="all"?"↻":"↻1";$("repeatBtn").title=repeat==="all"?"Repeat All":"Repeat One"};
 const fmt=t=>isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
@@ -854,4 +992,24 @@ $("go").onclick=async()=>{
 
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
 if(token)start();else $("auth").classList.remove("hide");
-</script></body></html>
+</script>
+<dialog id="accountDlg"><div class="card account-card">
+<h2 style="font-size:20px">Account</h2>
+<div class="small-note" id="accountInfo"></div>
+<input id="newUsername" class="in" placeholder="New username" autocomplete="username" autocapitalize="none">
+<input id="currentPassword" class="in" type="password" placeholder="Current password" autocomplete="current-password">
+<div id="accountMsg" class="small-note"></div>
+<button id="saveAccount" class="pbtn">Change username</button>
+<button id="closeAccount" class="pbtn alt">Close</button>
+</div></dialog>
+<dialog id="forgotDlg"><div class="card account-card">
+<h2 style="font-size:20px">Reset password</h2>
+<div class="small-note">Use the recovery code you received when the account was created.</div>
+<input id="fu" class="in" placeholder="Username" autocapitalize="none">
+<input id="fr" class="in" placeholder="Recovery code" autocapitalize="characters">
+<input id="fp" class="in" type="password" placeholder="New password" autocomplete="new-password">
+<div id="fm" class="small-note"></div>
+<button id="doForgot" class="pbtn">Reset password</button>
+<button id="closeForgot" class="pbtn alt">Close</button>
+</div></dialog>
+</body></html>
