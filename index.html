@@ -3139,15 +3139,7 @@ async function play(s){
 
 
   refresh();
-    if(await tryDirect(s,myLoadId)){
-    if(myLoadId!==loadId)return;
-    $("status").textContent="Playing";
-    sendActivity("PLAY",s.title+" — "+s.artist);
-    return;
-   }
-  if(myLoadId!==loadId)return;
-  au.pause();au.removeAttribute("src");au.load();
-
+ 
   try{
 
     /*
