@@ -617,7 +617,7 @@ body.light #player{
 .header-actions{margin-left:auto;flex-shrink:0}
 .desktop-action{display:flex;align-items:center;gap:8px}
 .header-btn.txt{width:auto;padding:0 14px;border-radius:22px;font-size:13px;font-weight:650}
-.mobile-menu-btn{display:none}
+.mobile-menu-btn{display:flex}
 .mobile-menu{display:none;position:absolute;right:14px;top:66px;z-index:45;width:210px;padding:8px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);box-shadow:var(--shadow)}
 .mobile-menu.open{display:grid;gap:4px}
 .mobile-menu button{border:0;background:transparent;color:var(--text);text-align:left;padding:12px;border-radius:10px;cursor:pointer}
@@ -652,7 +652,6 @@ body.light #player{
 .extras{display:flex;justify-content:center;gap:10px;margin-top:8px}
 .chip{border:1px solid var(--border);background:var(--surface-2);color:var(--text-soft);border-radius:999px;padding:6px 14px;font-size:12px;cursor:pointer}
 .chip.on{color:var(--accent);border-color:rgba(155,92,255,.45)}
-body{--player-height:252px}
 @media(max-width:600px){.favorite-btn{width:32px;height:34px;font-size:22px}.song-row{gap:8px;padding:10px}}
 .small-note{font-size:12px;color:var(--text-soft);line-height:1.45;text-align:center;min-height:16px}
 .link-btn{border:0;background:none;color:var(--accent);cursor:pointer;font-size:14px;padding:5px}
@@ -663,6 +662,8 @@ dialog{border:0;padding:0;background:none;color:var(--text);width:min(420px,94vw
 dialog::backdrop{background:rgba(0,0,0,.7)}
 @media(max-width:700px){.desktop-action{display:none}.mobile-menu-btn{display:flex}.library-select{min-width:0;flex:1}.playlist-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:380px){.playlist-grid{grid-template-columns:1fr}}
+.control-btn.on{color:var(--accent);border-color:rgba(155,92,255,.45);background:rgba(155,92,255,.10)}
+@media(max-width:600px){.control-btn{width:40px;height:40px;border-radius:12px}.control-btn.main{width:52px;height:52px}.controls{gap:5px}}
 </style></head><body>
 <div id="auth" class="hide"><div class="card">
 <h2>♫ Jus Music</h2>
@@ -693,6 +694,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <button id="mUpload" type="button">⇪ &nbsp; Upload song</button>
 <button id="mTheme" type="button">☼ &nbsp; Change theme</button>
 <button id="mAccount" type="button">♙ &nbsp; Account</button>
+<button id="sleepBtn" type="button">⏲ Sleep timer</button>
 <button id="mLogout" type="button">↪ &nbsp; Logout</button>
 </div>
 <div id="searchWrap" class="search-wrap"><input id="search" type="search" placeholder="Search songs..." autocomplete="off" spellcheck="false"></div>
@@ -721,10 +723,10 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <button id="playBtn" class="control-btn main" type="button" title="Play / Pause"><span id="playIcon" class="control-icon">▶</span></button>
 <button id="nextBtn" class="control-btn" type="button" title="Next"><span class="control-icon">▶|</span></button>
 <button id="repeatBtn" class="control-btn mode active" type="button" title="Repeat All"><span id="repeatIcon" class="control-icon">↻</span></button>
+<button id="speedBtn" class="control-btn mode" type="button" title="Playback speed">1×</button>
 <button id="volumeBtn" class="control-btn mode" type="button" title="Volume"><span class="control-icon">◖)</span></button>
 </div>
 <div id="volumePopup" class="volume-popup"><button id="muteBtn" class="volume-mute" type="button"><span id="muteIcon">◖)</span></button><input id="volume" type="range" min="0" max="100" value="100" step="1"></div>
-<div class="extras"><button id="sleepBtn" class="chip" type="button" title="Sleep timer">⏲ Sleep</button><button id="speedBtn" class="chip" type="button" title="Playback speed">1×</button></div>
 <div id="status">Ready</div>
 </div></section>
 </div>
