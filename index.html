@@ -652,7 +652,16 @@ body.light #player{
 .extras{display:flex;justify-content:center;gap:10px;margin-top:8px}
 .chip{border:1px solid var(--border);background:var(--surface-2);color:var(--text-soft);border-radius:999px;padding:6px 14px;font-size:12px;cursor:pointer}
 .chip.on{color:var(--accent);border-color:rgba(155,92,255,.45)}
+.control-btn.on{color:var(--accent);border-color:rgba(155,92,255,.45);background:rgba(155,92,255,.10)}
+@media(max-width:600px){.control-btn{width:40px;height:40px;border-radius:12px}.control-btn.main{width:52px;height:52px}.controls{gap:5px}}
 @media(max-width:600px){.favorite-btn{width:32px;height:34px;font-size:22px}.song-row{gap:8px;padding:10px}}
+.song-row{position:relative}
+.row-menu{display:none;position:absolute;right:10px;top:52px;z-index:30;min-width:210px;padding:6px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);box-shadow:var(--shadow)}
+.song-row.menu-open .row-menu{display:grid;gap:2px}
+.song-row.up .row-menu{top:auto;bottom:52px}
+.row-menu button{border:0;background:transparent;color:var(--text);text-align:left;padding:11px 12px;border-radius:10px;cursor:pointer;font-size:14px}
+.row-menu button:hover{background:var(--surface-3)}
+.row-menu .danger{color:#ff8a8a}
 .small-note{font-size:12px;color:var(--text-soft);line-height:1.45;text-align:center;min-height:16px}
 .link-btn{border:0;background:none;color:var(--accent);cursor:pointer;font-size:14px;padding:5px}
 .song-info{flex:1;min-width:0}
@@ -662,8 +671,6 @@ dialog{border:0;padding:0;background:none;color:var(--text);width:min(420px,94vw
 dialog::backdrop{background:rgba(0,0,0,.7)}
 @media(max-width:700px){.desktop-action{display:none}.mobile-menu-btn{display:flex}.library-select{min-width:0;flex:1}.playlist-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:380px){.playlist-grid{grid-template-columns:1fr}}
-.control-btn.on{color:var(--accent);border-color:rgba(155,92,255,.45);background:rgba(155,92,255,.10)}
-@media(max-width:600px){.control-btn{width:40px;height:40px;border-radius:12px}.control-btn.main{width:52px;height:52px}.controls{gap:5px}}
 </style></head><body>
 <div id="auth" class="hide"><div class="card">
 <h2>♫ Jus Music</h2>
@@ -736,7 +743,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <input type="file" id="file" accept="audio/*" class="in">
 <input id="ti" class="in" placeholder="Title"><input id="ar" class="in" placeholder="Artist">
 <select id="ul" class="in"></select><select id="ug" class="in"></select>
-<select id="uv" class="in"><option value="shared">Everyone</option><option value="admin">Me + admins</option><option value="private">Only me</option></select>
+<select id="uv" class="in"><option value="shared">Everyone</option><option value="private">Only me</option></select>
 <div id="us"></div>
 <button id="go" class="pbtn">Upload</button><button id="cl" class="pbtn alt">Close</button>
 </div></dialog>
@@ -788,16 +795,17 @@ const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 const ls=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
 const sv=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
 let token=localStorage.getItem("jmToken"),me=null,songs=[],queue=[],now=null,folder="All Songs",plView=null,q="",shuffle=false,repeat="all",fav=[],rec=[],pls=[],plSong=null;
-let loadId=0,ctl=null,want=false,loadedId=null,trying=false,noDirect=0;
+let loadId=0,ctl=null,want=false,loadedId=null,trying=false,noDirect=0,lastFail=0;
 const cache=new Map(),pend=new Map(),pfc=new Map();
 
 async function call(action,data={}){
   try{
     const r=await fetch(API,{method:"POST",body:JSON.stringify({action,token,...data})});
-    const j=await r.json();
+    const t=await r.text();let j;
+    try{j=JSON.parse(t)}catch(x){return{ok:false,error:"Server sent a page instead of data (HTTP "+r.status+"): "+t.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,200)}}
     if(j.auth)await logout(true);
     return j;
-  }catch(e){return{ok:false,error:"Cannot reach database. Check the URL and that access = Anyone"}}
+  }catch(e){return{ok:false,error:"Network problem: "+(e&&e.message||e)+" (check the web app link and that access = Anyone)"}}
 }
 const fill=(el,a)=>el.innerHTML=a.map(x=>`<option>${x}</option>`).join("");
 fill($("ul"),LANGS);fill($("ug"),GENRES);fill($("el"),LANGS);fill($("eg"),GENRES);
@@ -898,7 +906,7 @@ $("playlistOpenBtn").onclick=()=>{
 };
 
 /* ---------- library + songs ---------- */
-const VIS=["private","admin","shared"],VL={private:"only me",admin:"me + admins",shared:"everyone"};
+const VIS=["private","shared"],VL={private:"only me",admin:"me + admins",shared:"everyone"};
 function refresh(){
   if(!me)return;
   const L=[...new Set(songs.map(s=>s.language).filter(Boolean))],G=[...new Set(songs.map(s=>s.genre).filter(Boolean))].filter(g=>!L.includes(g));
@@ -926,10 +934,10 @@ function refresh(){
     const can=s.owner===me.name||me.role==="admin",f=fav.includes(s.id);
     return `<div class="song-row ${now&&now.id===s.id?"active":""}" data-id="${s.id}">
     <div class="song-number">${i+1}</div>
-    <div class="song-info"><span class="song-name">${esc(s.title)}</span><span class="song-meta">${esc(s.artist)} · ${esc(s.language)} · ${esc(s.genre)}${s.visibility==="private"?" · 🔒 only me":s.visibility==="admin"?" · 🛡 admins":""}</span></div>
+    <div class="song-info"><span class="song-name">${esc(s.title)}</span><span class="song-meta">${esc(s.artist)} · ${esc(s.language)} · ${esc(s.genre)}${s.visibility==="private"?" · 🔒 only me":s.visibility==="admin"?" · 🛡 admins":""}${me.role==="admin"&&s.owner!==me.name?" · 👤 "+esc(s.owner):""}</span></div>
     <button class="favorite-btn ${f?"active":""}" data-fav="${s.id}" title="Favorite">${f?"♥":"♡"}</button>
-    <button class="favorite-btn" data-addpl="${s.id}" title="Add to playlist">＋</button>
-    ${can?`<button class="favorite-btn" data-edit="${s.id}" title="Edit details">✎</button><button class="favorite-btn" data-vis="${s.id}" title="Change sharing">⇄</button><button class="favorite-btn" data-del="${s.id}" title="Delete">✕</button>`:""}</div>`;
+    <button class="favorite-btn" data-more="${s.id}" title="More options">⋮</button>
+    <div class="row-menu"><button data-addpl="${s.id}">＋ &nbsp;Add to playlist</button>${can?`<button data-edit="${s.id}">✎ &nbsp;Rename / edit details</button><button data-vis="${s.id}">⇄ &nbsp;${s.visibility==="private"?"Share with everyone":"Make private (only me)"}</button><button class="danger" data-del="${s.id}">✕ &nbsp;Delete song</button>`:""}</div></div>`;
   }).join(""):'<div class="empty">No songs found</div>';
 }
 $("folders").onclick=e=>{const f=e.target.dataset.f;if(!f)return;folder=f;plView=null;$("playlistPanel").classList.remove("open");$("libraryMenu").classList.remove("open");refresh()};
@@ -941,14 +949,23 @@ $("syncBtn").onclick=async()=>{
   const j=await call("list",{force:true});
   if(j.ok){songs=j.songs;refresh();$("status").textContent="Library updated"}else $("status").textContent=j.error;
 };
+function closeMenus(){document.querySelectorAll(".song-row.menu-open").forEach(r=>r.classList.remove("menu-open","up"))}
+document.addEventListener("click",e=>{if(!e.target.closest(".song-row"))closeMenus()});
 $("songs").onclick=async e=>{
   const d=e.target.dataset;
+  if(d.more){
+    const row=e.target.closest(".song-row"),was=row.classList.contains("menu-open");closeMenus();
+    if(!was){row.classList.add("menu-open");row.classList.toggle("up",row.getBoundingClientRect().bottom>innerHeight-290)}
+    return;
+  }
+  if(e.target.closest(".row-menu")&&!d.addpl&&!d.edit&&!d.vis&&!d.del)return;
+  closeMenus();
   if(d.addpl){openPlDlg(d.addpl);return}
   if(d.edit){openEdit(d.edit);return}
   if(d.fav){fav=fav.includes(d.fav)?fav.filter(x=>x!==d.fav):[...fav,d.fav];sv("jmFav_"+me.name,fav);refresh();return}
   if(d.vis){
     const s=songs.find(x=>x.id===d.vis);if(!s)return;
-    const nv=VIS[(VIS.indexOf(s.visibility)+1)%3];
+    const nv=VIS[(VIS.indexOf(s.visibility)+1)%VIS.length];
     const j=await call("update",{id:s.id,visibility:nv});
     if(j.ok){s.visibility=nv;refresh();$("status").textContent="Sharing: "+VL[nv]}else alert(j.error);
     return;
@@ -1001,17 +1018,17 @@ function prefetch(){
   if(shuffle||repeat==="one"||queue.length<2||!now)return;
   const i=queue.findIndex(x=>x.id===now.id);if(i<0)return;
   const n=queue[(i+1)%queue.length];
-  if(!n||n.id===now.id||cache.has(n.id)||pfc.has(n.id))return;
+  if(!n||canDirect(n)||n.id===now.id||cache.has(n.id)||pfc.has(n.id))return;
   const c=new AbortController();pfc.set(n.id,c);
   load(n,null,c.signal).catch(()=>{}).finally(()=>{if(pfc.get(n.id)===c)pfc.delete(n.id)});
 }
 const DIRECT=id=>"https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"?alt=media&key="+DRIVE_KEY;
-const canDirect=s=>!DRIVE_KEY.startsWith("PASTE")&&noDirect<2&&(!s.visibility||s.visibility==="shared");
+const canDirect=s=>!DRIVE_KEY.startsWith("PASTE")&&(noDirect<2||Date.now()-lastFail>30000)&&(!s.visibility||s.visibility==="shared");
 function tryDirect(s){ // stream straight from Drive; false if it cannot start within 6 seconds
   return new Promise(res=>{
     let done=false;
     const end=ok=>{if(done)return;done=true;clearTimeout(t);au.removeEventListener("playing",good);au.removeEventListener("error",bad);trying=false;res(ok)};
-    const good=()=>end(true),bad=()=>end(false),t=setTimeout(()=>end(false),6000);
+    const good=()=>end(true),bad=()=>end(false),t=setTimeout(()=>end(false),4000);
     trying=true;au.addEventListener("playing",good);au.addEventListener("error",bad);
     au.src=DIRECT(s.fileId);au.play().catch(()=>end(false));
   });
@@ -1037,11 +1054,12 @@ async function play(s){
     navigator.mediaSession.setActionHandler("seekforward",()=>{au.currentTime=Math.min(au.duration||1e9,au.currentTime+10)});
   }catch(e){}}
   refresh();
+  try{navigator.mediaSession.playbackState="playing"}catch(e){}
   if(canDirect(s)){
     const ok=await tryDirect(s);
     if(my!==loadId||!want)return;
-    if(ok){loadedId=s.id;$("status").textContent="Playing · direct";act("PLAY",s.title+" — "+s.artist);return}
-    au.pause();au.removeAttribute("src");au.load();noDirect++;
+    if(ok){noDirect=0;loadedId=s.id;$("status").textContent="Playing · direct";act("PLAY",s.title+" — "+s.artist);prefetch();return}
+    au.pause();au.removeAttribute("src");au.load();noDirect++;lastFail=Date.now();
     $("status").textContent="Direct play failed, loading the slow way...";
   }
   try{
