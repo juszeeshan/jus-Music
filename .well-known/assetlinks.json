@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.juszeeshan.twa",
+        "sha256_cert_fingerprints": ["FC:F6:B7:FC:44:69:9D:C3:71:7A:26:66:D8:79:9A:71:6F:3D:E9:A8:50:20:AD:EF:54:4E:24:85:7B:4B:D1:46"]
+      }
+    }]
