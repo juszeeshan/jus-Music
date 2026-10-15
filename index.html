@@ -457,13 +457,6 @@ body.light #player{
 .main .control-icon{
   font-size:23px;
 }
-
-/* Thins out the play/pause icon */
-.main .control-icon {
-  font-weight: 300 !important;
-  font-size: 20px !important;
-}
-
 /* =====================================================
    VOLUME
 ===================================================== */
@@ -669,6 +662,11 @@ body.light #player{
 .row-menu button{border:0;background:transparent;color:var(--text);text-align:left;padding:11px 12px;border-radius:10px;cursor:pointer;font-size:14px}
 .row-menu button:hover{background:var(--surface-3)}
 .row-menu .danger{color:#ff8a8a}
+.np-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.np-row #nowPlaying{flex:1;min-width:0;margin-bottom:0}
+.np-fav{border:0;background:none;color:var(--text-soft);font-size:25px;line-height:1;cursor:pointer;padding:0 4px}
+.np-fav.active{color:var(--accent)}
+.control-icon{white-space:nowrap;letter-spacing:-1px}
 .small-note{font-size:12px;color:var(--text-soft);line-height:1.45;text-align:center;min-height:16px}
 .link-btn{border:0;background:none;color:var(--accent);cursor:pointer;font-size:14px;padding:5px}
 .song-info{flex:1;min-width:0}
@@ -678,7 +676,6 @@ dialog{border:0;padding:0;background:none;color:var(--text);width:min(420px,94vw
 dialog::backdrop{background:rgba(0,0,0,.7)}
 @media(max-width:700px){.desktop-action{display:none}.mobile-menu-btn{display:flex}.library-select{min-width:0;flex:1}.playlist-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:380px){.playlist-grid{grid-template-columns:1fr}}
-.control-icon{white-space:nowrap;letter-spacing:-1px}
 </style></head><body>
 <div id="auth" class="hide"><div class="card">
 <h2>♫ Jus Music</h2>
@@ -730,7 +727,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 </main>
 
 <section id="player"><div class="player-inner">
-<div id="nowPlaying">Nothing playing</div>
+<div class="np-row"><div id="nowPlaying">Nothing playing</div><button id="favBtn" class="np-fav" type="button" title="Favorite">♡</button></div>
 <div class="progress-row"><span id="currentTime" class="time">0:00</span><input id="progress" type="range" min="0" max="100" value="0" step="0.1"><span id="duration" class="time">0:00</span></div>
 <div class="controls">
 <button id="shuffleBtn" class="control-btn mode" type="button" title="Shuffle"><span class="control-icon">⇄</span></button>
@@ -846,16 +843,30 @@ function stopAll(){
 }
 async function logout(skip){
   if(token&&!skip){try{await fetch(API,{method:"POST",body:JSON.stringify({action:"activity",token,activityAction:"LOGOUT",detail:"User logged out"})})}catch(e){}}
-  localStorage.removeItem("jmToken");token=null;stopAll();
+  localStorage.removeItem("jmToken");localStorage.removeItem("jmLibCache");token=null;stopAll();
   au.pause();au.removeAttribute("src");au.load();now=null;want=false;
   $("app").classList.add("hide");$("auth").classList.remove("hide");
 }
 $("outBtn").onclick=()=>logout();
+const saveLib=()=>{try{localStorage.setItem("jmLibCache",JSON.stringify({me,songs}))}catch(e){}};
 async function start(){
+  let cached=false;
+  try{
+    const c=JSON.parse(localStorage.getItem("jmLibCache")||"null");
+    if(c&&c.me&&Array.isArray(c.songs)){
+      me=c.me;songs=c.songs;fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);pls=ls("jmPlaylists_"+me.name,[]);
+      $("auth").classList.add("hide");$("app").classList.remove("hide");refresh();resumeLast();
+      $("status").textContent="Updating library...";cached=true;
+    }
+  }catch(e){}
   const j=await call("list");
-  if(!j.ok){$("err").textContent=j.error||"";await logout(true);return}
-  me=j.me;songs=j.songs;fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);pls=ls("jmPlaylists_"+me.name,[]);
+  if(!j.ok){
+    if(cached&&!j.auth){$("status").textContent="Offline - showing saved library";return}
+    $("err").textContent=j.error||"";await logout(true);return;
+  }
+  me=j.me;songs=j.songs;fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);pls=ls("jmPlaylists_"+me.name,[]);saveLib();
   $("auth").classList.add("hide");$("app").classList.remove("hide");refresh();resumeLast();
+  if(!now||au.paused)$("status").textContent=now?"Tap ▶ to continue":"Ready";
 }
 
 /* ---------- account ---------- */
@@ -868,7 +879,7 @@ $("saveAccount").onclick=async()=>{
   $("accountMsg").textContent="Saving...";
   const j=await call("changeUsername",{newUsername:$("newUsername").value,password:$("currentPassword").value});
   if(!j.ok){$("accountMsg").textContent=j.error;return}
-  const old=me.name;token=j.token;localStorage.setItem("jmToken",token);me=j.user;
+  const old=me.name;token=j.token;localStorage.setItem("jmToken",token);me=j.user;saveLib();
   ["jmFav_","jmRec_","jmPlaylists_"].forEach(k=>{const v=localStorage.getItem(k+old);if(v!==null){localStorage.setItem(k+me.name,v);localStorage.removeItem(k+old)}});
   fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);pls=ls("jmPlaylists_"+me.name,[]);
   $("accountDlg").close();refresh();$("status").textContent="Username changed to "+me.name;
@@ -906,7 +917,7 @@ $("playlistGrid").onclick=e=>{
     return;
   }
   const c=e.target.closest(".playlist-card");
-  if(c){plView=+c.dataset.pl;refresh();$("playlistPanel").classList.add("open")}
+  if(c){plView=+c.dataset.pl;shown=PAGE;refresh();$("playlistPanel").classList.add("open")}
 };
 $("playlistOpenBtn").onclick=()=>{
   const p=$("playlistPanel");p.classList.toggle("open");
@@ -914,6 +925,7 @@ $("playlistOpenBtn").onclick=()=>{
 };
 
 /* ---------- library + songs ---------- */
+const PAGE=120;let shown=PAGE;
 const VIS=["private","shared"],VL={private:"only me",admin:"me + admins",shared:"everyone"};
 function refresh(){
   if(!me)return;
@@ -938,7 +950,7 @@ function refresh(){
   }
   queue=a;
   if(plView===null)$("songsTitle").textContent="Songs · "+a.length;
-  $("songs").innerHTML=queue.length?queue.map((s,i)=>{
+  $("songs").innerHTML=queue.length?queue.slice(0,shown).map((s,i)=>{
     const can=s.owner===me.name||me.role==="admin",f=fav.includes(s.id);
     return `<div class="song-row ${now&&now.id===s.id?"active":""}" data-id="${s.id}">
     <div class="song-number">${i+1}</div>
@@ -946,21 +958,22 @@ function refresh(){
     <button class="favorite-btn ${f?"active":""}" data-fav="${s.id}" title="Favorite">${f?"♥":"♡"}</button>
     <button class="favorite-btn" data-more="${s.id}" title="More options">⋮</button>
     <div class="row-menu"><button data-addpl="${s.id}">＋ &nbsp;Add to playlist</button>${can?`<button data-edit="${s.id}">✎ &nbsp;Rename / edit details</button><button data-vis="${s.id}">⇄ &nbsp;${s.visibility==="private"?"Share with everyone":"Make private (only me)"}</button><button class="danger" data-del="${s.id}">✕ &nbsp;Delete song</button>`:""}</div></div>`;
-  }).join(""):'<div class="empty">No songs found</div>';
+  }).join("")+(queue.length>shown?'<button class="pbtn alt" id="moreBtn" type="button" style="grid-column:1/-1">Show more ('+(queue.length-shown)+' left)</button>':""):'<div class="empty">No songs found</div>';
 }
-$("folders").onclick=e=>{const f=e.target.dataset.f;if(!f)return;folder=f;plView=null;$("playlistPanel").classList.remove("open");$("libraryMenu").classList.remove("open");refresh()};
+$("folders").onclick=e=>{const f=e.target.dataset.f;if(!f)return;folder=f;plView=null;shown=PAGE;$("playlistPanel").classList.remove("open");$("libraryMenu").classList.remove("open");refresh()};
 $("libraryBtn").onclick=()=>$("libraryMenu").classList.toggle("open");
-$("search").oninput=e=>{q=e.target.value;refresh()};
+$("search").oninput=e=>{q=e.target.value;shown=PAGE;refresh()};
 $("searchBtn").onclick=()=>{$("searchWrap").classList.toggle("open");if($("searchWrap").classList.contains("open"))$("search").focus()};
 $("syncBtn").onclick=async()=>{
   $("status").textContent="Refreshing...";
   const j=await call("list",{force:true});
-  if(j.ok){songs=j.songs;refresh();$("status").textContent="Library updated"}else $("status").textContent=j.error;
+  if(j.ok){songs=j.songs;saveLib();refresh();$("status").textContent="Library updated"}else $("status").textContent=j.error;
 };
 function closeMenus(){document.querySelectorAll(".song-row.menu-open").forEach(r=>r.classList.remove("menu-open","up"))}
 document.addEventListener("click",e=>{if(!e.target.closest(".song-row"))closeMenus()});
 $("songs").onclick=async e=>{
   const d=e.target.dataset;
+  if(e.target.id==="moreBtn"){shown+=PAGE;refresh();return}
   if(d.more){
     const row=e.target.closest(".song-row"),was=row.classList.contains("menu-open");closeMenus();
     if(!was){row.classList.add("menu-open");row.classList.toggle("up",row.getBoundingClientRect().bottom>innerHeight-290)}
@@ -975,7 +988,7 @@ $("songs").onclick=async e=>{
     const s=songs.find(x=>x.id===d.vis);if(!s)return;
     const nv=VIS[(VIS.indexOf(s.visibility)+1)%VIS.length];
     const j=await call("update",{id:s.id,visibility:nv});
-    if(j.ok){s.visibility=nv;refresh();$("status").textContent="Sharing: "+VL[nv]}else alert(j.error);
+    if(j.ok){s.visibility=nv;saveLib();refresh();$("status").textContent="Sharing: "+VL[nv]}else alert(j.error);
     return;
   }
   if(d.del){
@@ -983,7 +996,7 @@ $("songs").onclick=async e=>{
     const j=await call("delete",{id:d.del});
     if(j.ok){
       if(cache.has(d.del)){try{URL.revokeObjectURL(cache.get(d.del))}catch(x){}cache.delete(d.del)}
-      songs=songs.filter(s=>s.id!==d.del);
+      songs=songs.filter(s=>s.id!==d.del);saveLib();
       if(now&&now.id===d.del){now=null;want=false;loadId++;au.pause();au.removeAttribute("src");au.load();$("nowPlaying").textContent="Nothing playing"}
       refresh();
     }else alert(j.error);
@@ -1041,13 +1054,18 @@ function tryDirect(s){ // stream straight from Drive; false if it cannot start w
     au.src=DIRECT(s.fileId);au.play().catch(()=>end(false));
   });
 }
+function markActive(){
+  document.querySelectorAll(".song-row.active").forEach(r=>r.classList.remove("active"));
+  if(now){const r=document.querySelector('.song-row[data-id="'+now.id+'"]');if(r)r.classList.add("active")}
+  favSync();
+}
 async function play(s){
   if(!s)return;
   const my=++loadId;loadedId=null;
   if(ctl){try{ctl.abort()}catch(e){}}
   pfc.forEach((c,id)=>{if(id!==s.id){try{c.abort()}catch(e){}pfc.delete(id);pend.delete(id)}});
   ctl=new AbortController();const sig=ctl.signal;
-  want=true;now=s;au.pause();
+  want=true;now=s;
   $("nowPlaying").textContent=s.title+" — "+s.artist;$("status").textContent="Loading...";
   rec=[s.id,...rec.filter(x=>x!==s.id)].slice(0,30);sv("jmRec_"+me.name,rec);
   try{localStorage.setItem("jmLast_"+me.name,s.id)}catch(e){}
@@ -1061,7 +1079,7 @@ async function play(s){
     navigator.mediaSession.setActionHandler("seekbackward",()=>{au.currentTime=Math.max(0,au.currentTime-10)});
     navigator.mediaSession.setActionHandler("seekforward",()=>{au.currentTime=Math.min(au.duration||1e9,au.currentTime+10)});
   }catch(e){}}
-  refresh();
+  if(folder==="Recent"&&plView===null)refresh();else markActive();
   try{navigator.mediaSession.playbackState="playing"}catch(e){}
   if(canDirect(s)){
     const ok=await tryDirect(s);
@@ -1070,6 +1088,7 @@ async function play(s){
     au.pause();au.removeAttribute("src");au.load();noDirect++;lastFail=Date.now();
     $("status").textContent="Direct play failed, loading the slow way...";
   }
+  au.pause();
   try{
     const u=await load(s,f=>{if(my===loadId)$("status").textContent="Loading "+Math.round(f*100)+"%"},sig);
     if(my!==loadId||!want)return;
@@ -1163,7 +1182,7 @@ $("go").onclick=async()=>{
   const j=await call("upload",{data:btoa(bin),hash,mime:f.type,ext:f.name.split(".").pop()||"mp3",title:$("ti").value,artist:$("ar").value,language:$("ul").value,genre:$("ug").value,visibility:$("uv").value});
   $("go").disabled=false;
   if(!j.ok){us.textContent=j.error;return}
-  songs.push(j.song);refresh();us.textContent="";$("file").value="";$("dlg").close();
+  songs.push(j.song);saveLib();refresh();us.textContent="";$("file").value="";$("dlg").close();
 };
 
 
@@ -1209,6 +1228,9 @@ try{
 $("shuffleBtn").addEventListener("click",()=>{try{localStorage.setItem("jmShuffle",shuffle?"1":"0")}catch(e){}});
 $("repeatBtn").addEventListener("click",()=>{try{localStorage.setItem("jmRepeat",repeat)}catch(e){}});
 $("volume").addEventListener("input",ev=>{try{localStorage.setItem("jmVol",ev.target.value)}catch(e){}});
+function favSync(){const f=!!now&&fav.includes(now.id);$("favBtn").textContent=f?"♥":"♡";$("favBtn").classList.toggle("active",f)}
+$("favBtn").onclick=()=>{if(!now)return;fav=fav.includes(now.id)?fav.filter(x=>x!==now.id):[...fav,now.id];sv("jmFav_"+me.name,fav);refresh()};
+const _rf=refresh;refresh=function(){_rf();favSync()};
 
 function resumeLast(){
   let id=null;try{id=localStorage.getItem("jmLast_"+me.name)}catch(e){}
@@ -1242,7 +1264,7 @@ $("saveEdit").onclick=async()=>{
   $("em").textContent="Saving...";
   const j=await call("update",{id:editId,title:$("et").value,artist:$("ea").value,language:$("el").value,genre:$("eg").value});
   if(!j.ok){$("em").textContent=j.error;return}
-  const i=songs.findIndex(x=>x.id===editId);if(i>=0)songs[i]=j.song;
+  const i=songs.findIndex(x=>x.id===editId);if(i>=0){songs[i]=j.song;saveLib()}
   if(now&&now.id===editId){now=j.song;$("nowPlaying").textContent=now.title+" — "+now.artist}
   $("editDlg").close();refresh();
 };
