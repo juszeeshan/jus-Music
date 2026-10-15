@@ -676,6 +676,17 @@ dialog{border:0;padding:0;background:none;color:var(--text);width:min(420px,94vw
 dialog::backdrop{background:rgba(0,0,0,.7)}
 @media(max-width:700px){.desktop-action{display:none}.mobile-menu-btn{display:flex}.library-select{min-width:0;flex:1}.playlist-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:380px){.playlist-grid{grid-template-columns:1fr}}
+/* v7: controls row fits 8 buttons, black glossy play button, filled sliders */
+.controls{gap:6px;padding:0 2px}
+.controls .control-btn{position:relative;flex:1 1 0;min-width:0;max-width:52px;width:auto;height:46px;border-radius:14px}
+.controls .control-btn.main{flex:1.3 1 0;max-width:66px;height:58px;border-radius:50%;
+  background:linear-gradient(165deg,#3b3b42 0%,#0c0c0e 46%,#000 100%) padding-box,linear-gradient(135deg,#ffffff,#6d6d74 34%,#e9e9ec 58%,#4b4b52) border-box;
+  border:2px solid transparent;color:#fff;
+  box-shadow:inset 0 2px 1px rgba(255,255,255,.28),inset 0 -8px 14px rgba(0,0,0,.85),0 8px 22px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.05)}
+.controls .control-btn.main::after{content:"";position:absolute;left:14%;right:14%;top:5%;height:44%;border-radius:50%;background:linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,0));pointer-events:none}
+.controls .control-btn.main:active{transform:scale(.94)}
+@media(max-width:400px){.controls{gap:4px}.controls .control-icon{font-size:17px}.controls .control-btn.main .control-icon{font-size:21px}}
+#progress,#volume{background:linear-gradient(90deg,var(--accent) var(--p,0%),var(--surface-3) var(--p,0%))}
 </style></head><body>
 <div id="auth" class="hide"><div class="card">
 <h2>♫ Jus Music</h2>
@@ -727,13 +738,14 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 </main>
 
 <section id="player"><div class="player-inner">
-<div class="np-row"><div id="nowPlaying">Nothing playing</div><button id="favBtn" class="np-fav" type="button" title="Favorite">♡</button></div>
+<div id="nowPlaying">Nothing playing</div>
 <div class="progress-row"><span id="currentTime" class="time">0:00</span><input id="progress" type="range" min="0" max="100" value="0" step="0.1"><span id="duration" class="time">0:00</span></div>
 <div class="controls">
 <button id="shuffleBtn" class="control-btn mode" type="button" title="Shuffle"><span class="control-icon">⇄</span></button>
 <button id="prevBtn" class="control-btn" type="button" title="Previous"><span class="control-icon">|◀</span></button>
 <button id="playBtn" class="control-btn main" type="button" title="Play / Pause"><span id="playIcon" class="control-icon">▶</span></button>
 <button id="nextBtn" class="control-btn" type="button" title="Next"><span class="control-icon">▶|</span></button>
+<button id="favBtn" class="control-btn mode" type="button" title="Favorite"><span class="control-icon">♡</span></button>
 <button id="repeatBtn" class="control-btn mode active" type="button" title="Repeat All"><span id="repeatIcon" class="control-icon">↻</span></button>
 <button id="speedBtn" class="control-btn mode" type="button" title="Playback speed">1×</button>
 <button id="volumeBtn" class="control-btn mode" type="button" title="Volume"><span class="control-icon">◖)</span></button>
@@ -864,7 +876,7 @@ async function start(){
     if(cached&&!j.auth){$("status").textContent="Offline - showing saved library";return}
     $("err").textContent=j.error||"";await logout(true);return;
   }
-  me=j.me;songs=j.songs;fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);pls=ls("jmPlaylists_"+me.name,[]);saveLib();
+  me=j.me;songs=j.songs;fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);pls=ls("jmPlaylists_"+me.name,[]);saveLib();adoptSync(j);
   $("auth").classList.add("hide");$("app").classList.remove("hide");refresh();resumeLast();
   if(!now||au.paused)$("status").textContent=now?"Tap ▶ to continue":"Ready";
 }
@@ -880,13 +892,13 @@ $("saveAccount").onclick=async()=>{
   const j=await call("changeUsername",{newUsername:$("newUsername").value,password:$("currentPassword").value});
   if(!j.ok){$("accountMsg").textContent=j.error;return}
   const old=me.name;token=j.token;localStorage.setItem("jmToken",token);me=j.user;saveLib();
-  ["jmFav_","jmRec_","jmPlaylists_"].forEach(k=>{const v=localStorage.getItem(k+old);if(v!==null){localStorage.setItem(k+me.name,v);localStorage.removeItem(k+old)}});
+  ["jmFav_","jmRec_","jmPlaylists_","jmSynced_"].forEach(k=>{const v=localStorage.getItem(k+old);if(v!==null){localStorage.setItem(k+me.name,v);localStorage.removeItem(k+old)}});
   fav=ls("jmFav_"+me.name,[]);rec=ls("jmRec_"+me.name,[]);pls=ls("jmPlaylists_"+me.name,[]);
   $("accountDlg").close();refresh();$("status").textContent="Username changed to "+me.name;
 };
 
 /* ---------- playlists ---------- */
-const savePl=()=>sv("jmPlaylists_"+me.name,pls);
+const savePl=()=>{sv("jmPlaylists_"+me.name,pls);syncUp()};
 function renderPl(){
   $("playlistGrid").innerHTML=pls.length?pls.map((p,i)=>`<div class="playlist-card" data-pl="${i}"><button class="playlist-delete" data-pdel="${i}" title="Delete playlist">×</button><strong>♫ ${esc(p.name)}</strong><span>${p.ids.length} song${p.ids.length===1?"":"s"}</span></div>`).join(""):'<div class="empty">No playlists yet.</div>';
 }
@@ -983,7 +995,7 @@ $("songs").onclick=async e=>{
   closeMenus();
   if(d.addpl){openPlDlg(d.addpl);return}
   if(d.edit){openEdit(d.edit);return}
-  if(d.fav){fav=fav.includes(d.fav)?fav.filter(x=>x!==d.fav):[...fav,d.fav];sv("jmFav_"+me.name,fav);refresh();return}
+  if(d.fav){fav=fav.includes(d.fav)?fav.filter(x=>x!==d.fav):[...fav,d.fav];sv("jmFav_"+me.name,fav);syncUp();refresh();return}
   if(d.vis){
     const s=songs.find(x=>x.id===d.vis);if(!s)return;
     const nv=VIS[(VIS.indexOf(s.visibility)+1)%VIS.length];
@@ -1228,8 +1240,8 @@ try{
 $("shuffleBtn").addEventListener("click",()=>{try{localStorage.setItem("jmShuffle",shuffle?"1":"0")}catch(e){}});
 $("repeatBtn").addEventListener("click",()=>{try{localStorage.setItem("jmRepeat",repeat)}catch(e){}});
 $("volume").addEventListener("input",ev=>{try{localStorage.setItem("jmVol",ev.target.value)}catch(e){}});
-function favSync(){const f=!!now&&fav.includes(now.id);$("favBtn").textContent=f?"♥":"♡";$("favBtn").classList.toggle("active",f)}
-$("favBtn").onclick=()=>{if(!now)return;fav=fav.includes(now.id)?fav.filter(x=>x!==now.id):[...fav,now.id];sv("jmFav_"+me.name,fav);refresh()};
+function favSync(){const f=!!now&&fav.includes(now.id);$("favBtn").innerHTML='<span class="control-icon">'+(f?"♥":"♡")+'</span>';$("favBtn").classList.toggle("active",f)}
+$("favBtn").onclick=()=>{if(!now)return;fav=fav.includes(now.id)?fav.filter(x=>x!==now.id):[...fav,now.id];sv("jmFav_"+me.name,fav);syncUp();refresh()};
 const _rf=refresh;refresh=function(){_rf();favSync()};
 
 function resumeLast(){
@@ -1268,6 +1280,42 @@ $("saveEdit").onclick=async()=>{
   if(now&&now.id===editId){now=j.song;$("nowPlaying").textContent=now.title+" — "+now.artist}
   $("editDlg").close();refresh();
 };
+
+
+/* ---------- favorites + playlists follow your account on every device ---------- */
+let syncT=null,dirty=false,lastPull=0;
+function syncUp(){
+  dirty=true;clearTimeout(syncT);
+  syncT=setTimeout(async()=>{if(!token)return;const r=await call("saveSync",{fav,pls});if(r&&r.ok)dirty=false},1500);
+}
+function mergePls(a,b){
+  const out=a.map(p=>({name:p.name,ids:[...p.ids]}));
+  b.forEach(p=>{const m=out.find(x=>x.name===p.name);if(m){p.ids.forEach(i=>{if(!m.ids.includes(i))m.ids.push(i)})}else out.push({name:p.name,ids:[...p.ids]})});
+  return out;
+}
+function adoptSync(j){
+  const key="jmSynced_"+me.name,first=!localStorage.getItem(key);let push=false;
+  if(Array.isArray(j.fav)){if(first){const m=[...new Set([...j.fav,...fav])];if(m.length!==j.fav.length)push=true;fav=m}else fav=j.fav}
+  else if(fav.length)push=true;
+  if(Array.isArray(j.pls)){if(first){const m=mergePls(j.pls,pls);if(JSON.stringify(m)!==JSON.stringify(j.pls))push=true;pls=m}else pls=j.pls}
+  else if(pls.length)push=true;
+  sv("jmFav_"+me.name,fav);sv("jmPlaylists_"+me.name,pls);
+  try{localStorage.setItem(key,"1")}catch(e){}
+  if(push)syncUp();
+}
+document.addEventListener("visibilitychange",async()=>{
+  if(document.hidden||!token||!me||dirty||Date.now()-lastPull<60000)return;
+  lastPull=Date.now();
+  const j=await call("getSync");
+  if(j.ok&&!dirty){adoptSync(j);refresh()}
+});
+
+/* ---------- sliders fill as the pointer moves ---------- */
+function fillBar(el){el.style.setProperty("--p",(100*(el.value-el.min)/((el.max-el.min)||1))+"%")}
+const _tu2=au.ontimeupdate;au.ontimeupdate=()=>{_tu2();fillBar($("progress"))};
+$("progress").addEventListener("input",()=>fillBar($("progress")));
+$("volume").addEventListener("input",()=>fillBar($("volume")));
+fillBar($("volume"));
 
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 if(token)start();else $("auth").classList.remove("hide");
