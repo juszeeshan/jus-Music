@@ -737,13 +737,13 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="nowPlaying">Nothing playing</div>
 <div class="progress-row"><span id="currentTime" class="time">0:00</span><input id="progress" type="range" min="0" max="100" value="0" step="0.1"><span id="duration" class="time">0:00</span></div>
 <div class="controls">
+<button id="speedBtn" class="control-btn mode" type="button" title="Playback speed">1×</button>
 <button id="shuffleBtn" class="control-btn mode" type="button" title="Shuffle"><span class="control-icon">⇄</span></button>
+<button id="repeatBtn" class="control-btn mode active" type="button" title="Repeat All"><span id="repeatIcon" class="control-icon">↻</span></button>
 <button id="prevBtn" class="control-btn" type="button" title="Previous"><span class="control-icon">|◀</span></button>
 <button id="playBtn" class="control-btn main" type="button" title="Play / Pause"><span id="playIcon" class="control-icon">▶</span></button>
 <button id="nextBtn" class="control-btn" type="button" title="Next"><span class="control-icon">▶|</span></button>
 <button id="favBtn" class="control-btn mode" type="button" title="Favorite"><span class="control-icon">♡</span></button>
-<button id="repeatBtn" class="control-btn mode active" type="button" title="Repeat All"><span id="repeatIcon" class="control-icon">↻</span></button>
-<button id="speedBtn" class="control-btn mode" type="button" title="Playback speed">1×</button>
 <button id="volumeBtn" class="control-btn mode" type="button" title="Volume"><span class="control-icon">◖)</span></button>
 </div>
 <div id="volumePopup" class="volume-popup"><button id="muteBtn" class="volume-mute" type="button"><span id="muteIcon">◖)</span></button><input id="volume" type="range" min="0" max="100" value="100" step="1"></div>
