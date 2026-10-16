@@ -737,13 +737,13 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="nowPlaying">Nothing playing</div>
 <div class="progress-row"><span id="currentTime" class="time">0:00</span><input id="progress" type="range" min="0" max="100" value="0" step="0.1"><span id="duration" class="time">0:00</span></div>
 <div class="controls">
-<button id="speedBtn" class="control-btn mode" type="button" title="Playback speed">1×</button>
 <button id="shuffleBtn" class="control-btn mode" type="button" title="Shuffle"><span class="control-icon">⇄</span></button>
-<button id="repeatBtn" class="control-btn mode active" type="button" title="Repeat All"><span id="repeatIcon" class="control-icon">↻</span></button>
 <button id="prevBtn" class="control-btn" type="button" title="Previous"><span class="control-icon">|◀</span></button>
 <button id="playBtn" class="control-btn main" type="button" title="Play / Pause"><span id="playIcon" class="control-icon">▶</span></button>
 <button id="nextBtn" class="control-btn" type="button" title="Next"><span class="control-icon">▶|</span></button>
 <button id="favBtn" class="control-btn mode" type="button" title="Favorite"><span class="control-icon">♡</span></button>
+<button id="repeatBtn" class="control-btn mode active" type="button" title="Repeat All"><span id="repeatIcon" class="control-icon">↻</span></button>
+<button id="speedBtn" class="control-btn mode" type="button" title="Playback speed">1×</button>
 <button id="volumeBtn" class="control-btn mode" type="button" title="Volume"><span class="control-icon">◖)</span></button>
 </div>
 <div id="volumePopup" class="volume-popup"><button id="muteBtn" class="volume-mute" type="button"><span id="muteIcon">◖)</span></button><input id="volume" type="range" min="0" max="100" value="100" step="1"></div>
@@ -1037,19 +1037,54 @@ async function load(s,prog,sig){
       await Promise.all([p,p+1,p+2].filter(k=>k<n).map(async k=>{out[k]=(await part(s.id,k,sig)).data;done++;if(prog)prog(done/n)}));
     }
     const u=URL.createObjectURL(new Blob(out.map(dec),{type:s.mime||first.mime||"audio/mpeg"}));
-    cache.set(s.id,u);
-    while(cache.size>3){const o=cache.keys().next().value;if(o===s.id)break;try{URL.revokeObjectURL(cache.get(o))}catch(e){}cache.delete(o)}
+    putCache(s.id,u);
     return u;
   })().finally(()=>pend.delete(s.id));
   pend.set(s.id,pr);return pr;
 }
-function prefetch(){
-  if(shuffle||repeat==="one"||queue.length<2||!now)return;
-  const i=queue.findIndex(x=>x.id===now.id);if(i<0)return;
-  const n=queue[(i+1)%queue.length];
-  if(!n||canDirect(n)||n.id===now.id||cache.has(n.id)||pfc.has(n.id))return;
-  const c=new AbortController();pfc.set(n.id,c);
-  load(n,null,c.signal).catch(()=>{}).finally(()=>{if(pfc.get(n.id)===c)pfc.delete(n.id)});
+let pfBusy=false,shufNext=null,directFetchBad=false;
+function peekNext(k){ // the song that follows (k=0) or the one after it (k=1)
+  if(!now||queue.length<2)return null;
+  if(shuffle){
+    if(k>0)return null;
+    if(!shufNext||shufNext.id===now.id||!queue.some(x=>x.id===shufNext.id)){
+      let n;do{n=queue[Math.floor(Math.random()*queue.length)]}while(n.id===now.id);shufNext=n;
+    }
+    return shufNext;
+  }
+  const i=queue.findIndex(x=>x.id===now.id);if(i<0)return null;
+  return queue[(i+1+k)%queue.length];
+}
+function putCache(id,u){ // keep the playing song and the next two on the phone, drop the rest
+  cache.set(id,u);
+  const a=peekNext(0),b=peekNext(1),keep=new Set([id,now&&now.id,a&&a.id,b&&b.id]);
+  while(cache.size>4){
+    const o=[...cache.keys()].find(k=>!keep.has(k));
+    if(o===undefined)break;
+    try{URL.revokeObjectURL(cache.get(o))}catch(e){}cache.delete(o);
+  }
+}
+async function prefetch(){ // download the next two songs while this one plays, so changing songs needs no internet
+  if(pfBusy||!now||repeat==="one"||queue.length<2)return;
+  pfBusy=true;
+  try{
+    for(let k=0;k<2;k++){
+      const n=peekNext(k);
+      if(!n||n.id===now.id||cache.has(n.id))continue;
+      const c=new AbortController();pfc.set(n.id,c);
+      try{
+        if(canDirect(n)&&!directFetchBad){
+          try{
+            const r=await fetch(DIRECT(n.fileId),{signal:c.signal});
+            if(!r.ok)throw new Error("HTTP "+r.status);
+            const b=await r.blob();
+            putCache(n.id,URL.createObjectURL(new Blob([b],{type:n.mime||b.type||"audio/mpeg"})));
+          }catch(e){if(e.name==="AbortError")throw e;directFetchBad=true;await load(n,null,c.signal)}
+        }else await load(n,null,c.signal);
+      }catch(e){if(e.name==="AbortError")break}
+      finally{if(pfc.get(n.id)===c)pfc.delete(n.id)}
+    }
+  }finally{pfBusy=false}
 }
 const DIRECT=id=>"https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"?alt=media&key="+DRIVE_KEY;
 const canDirect=s=>!DRIVE_KEY.startsWith("PASTE")&&(noDirect<2||Date.now()-lastFail>30000)&&(!s.visibility||s.visibility==="shared");
@@ -1089,6 +1124,11 @@ async function play(s){
   }catch(e){}}
   if(folder==="Recent"&&plView===null)refresh();else markActive();
   try{navigator.mediaSession.playbackState="playing"}catch(e){}
+  if(cache.has(s.id)){ // already on the phone: starts at once, no internet needed
+    const u=cache.get(s.id);cache.delete(s.id);cache.set(s.id,u);
+    au.src=u;loadedId=s.id;au.play().catch(()=>{$("status").textContent="Tap ▶ to continue"});
+    $("status").textContent="Playing";act("PLAY",s.title+" — "+s.artist);prefetch();return;
+  }
   if(canDirect(s)){
     const ok=await tryDirect(s);
     if(my!==loadId||!want)return;
@@ -1115,7 +1155,7 @@ function step(dir){
   let n;
   if(shuffle&&dir>0){
     if(queue.length===1)n=0;
-    else do{n=Math.floor(Math.random()*queue.length)}while(now&&queue[n].id===now.id);
+    else{const p=peekNext(0);n=p?queue.findIndex(x=>x.id===p.id):0;if(n<0)n=0;shufNext=null}
   }else n=(i+dir+queue.length)%queue.length;   // 1→2→3→1
   play(queue[n]);
 }
@@ -1312,6 +1352,10 @@ const _tu2=au.ontimeupdate;au.ontimeupdate=()=>{_tu2();fillBar($("progress"))};
 $("progress").addEventListener("input",()=>fillBar($("progress")));
 $("volume").addEventListener("input",()=>fillBar($("volume")));
 fillBar($("volume"));
+
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden&&want&&now&&au.paused&&loadedId===now.id&&!au.ended)$("status").textContent="Paused by the phone - tap ▶ to continue";
+});
 
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 if(token)start();else $("auth").classList.remove("hide");
