@@ -683,6 +683,23 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 .controls .control-btn.main:active{transform:scale(.94)}
 @media(max-width:400px){.controls{gap:4px}.controls .control-icon{font-size:17px}}
 #progress,#volume{background:linear-gradient(90deg,var(--accent) var(--p,0%),var(--surface-3) var(--p,0%))}
+/* v9: roomy two-row controls, every button black with a thin icon */
+.controls{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:14px;padding:0}
+.controls .control-btn{position:relative;flex:0 1 52px;width:auto;max-width:52px;min-width:0;height:auto;aspect-ratio:1/1;border-radius:50%;padding:0;background:linear-gradient(160deg,#1a1a1e,#050506);border:1px solid rgba(255,255,255,.2);color:#f2f2f4;box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 4px 14px rgba(0,0,0,.5)}
+.controls .control-btn.main{flex:0 1 52px;max-width:52px;background:#000;border:1px solid rgba(255,255,255,.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 4px 14px rgba(0,0,0,.6)}
+.controls .control-btn.main::after{display:none}
+.controls .control-btn.mode.active{color:var(--accent);border-color:rgba(155,92,255,.7);background:linear-gradient(160deg,#1a1230,#050506)}
+.controls2{display:flex;justify-content:center;gap:16px;margin-top:12px}
+.controls2 .control-btn{position:relative;width:auto;min-width:46px;height:34px;padding:0 14px;border-radius:999px;flex:none;font-size:14px;font-weight:600;background:linear-gradient(160deg,#1a1a1e,#050506);border:1px solid rgba(255,255,255,.2);color:#f2f2f4;display:flex;align-items:center;justify-content:center}
+.controls2 .control-btn.mode.active,.controls2 .control-btn.on{color:var(--accent);border-color:rgba(155,92,255,.7)}
+.control-btn svg{width:44%;height:44%;display:block}
+.controls2 .control-btn svg{width:20px;height:20px}
+.control-btn .control-icon{display:flex;align-items:center;justify-content:center;width:100%;height:100%;white-space:nowrap;letter-spacing:0}
+.controls2 .control-btn .control-icon{width:auto;height:auto;font-size:18px}
+.rep1{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:9px;font-weight:800;line-height:1}
+body.light .controls .control-btn,body.light .controls2 .control-btn{background:#fff;border-color:rgba(0,0,0,.25);color:#111;box-shadow:none}
+#player .volume-popup{right:auto;left:50%;transform:translateX(-50%);bottom:84px}
+body{--player-height:250px}
 </style></head><body>
 <div id="auth" class="hide"><div class="card">
 <h2>♫ Jus Music</h2>
@@ -713,7 +730,10 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <button id="mUpload" type="button">⇪ &nbsp; Upload song</button>
 <button id="mTheme" type="button">☼ &nbsp; Change theme</button>
 <button id="mAccount" type="button">♙ &nbsp; Account</button>
+<button id="mStream" type="button">🔋 Screen-off mode: ON</button>
+<button id="mDiag" type="button">🛠 Diagnostics</button>
 <button id="sleepBtn" type="button">⏲ Sleep timer</button>
+<button id="mLog" type="button">🧾 &nbsp; Playback log</button>
 <button id="mLogout" type="button">↪ &nbsp; Logout</button>
 </div>
 <div id="searchWrap" class="search-wrap"><input id="search" type="search" placeholder="Search songs..." autocomplete="off" spellcheck="false"></div>
@@ -737,14 +757,16 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="nowPlaying">Nothing playing</div>
 <div class="progress-row"><span id="currentTime" class="time">0:00</span><input id="progress" type="range" min="0" max="100" value="0" step="0.1"><span id="duration" class="time">0:00</span></div>
 <div class="controls">
-<button id="shuffleBtn" class="control-btn mode" type="button" title="Shuffle"><span class="control-icon">⇄</span></button>
-<button id="prevBtn" class="control-btn" type="button" title="Previous"><span class="control-icon">|◀</span></button>
-<button id="playBtn" class="control-btn main" type="button" title="Play / Pause"><span id="playIcon" class="control-icon">▶</span></button>
-<button id="nextBtn" class="control-btn" type="button" title="Next"><span class="control-icon">▶|</span></button>
+<button id="shuffleBtn" class="control-btn mode" type="button" title="Shuffle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+<button id="prevBtn" class="control-btn" type="button" title="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 19 2 12 11 5 11 19"/><polygon points="22 19 13 12 22 5 22 19"/></svg></button>
+<button id="playBtn" class="control-btn main" type="button" title="Play / Pause"><span id="playIcon" class="control-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 18 12 7 19 7 5"/></svg></span></button>
+<button id="nextBtn" class="control-btn" type="button" title="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></svg></button>
+<button id="repeatBtn" class="control-btn mode active" type="button" title="Repeat All"><span id="repeatIcon" class="control-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span></button>
+</div>
+<div class="controls2">
 <button id="favBtn" class="control-btn mode" type="button" title="Favorite"><span class="control-icon">♡</span></button>
-<button id="repeatBtn" class="control-btn mode active" type="button" title="Repeat All"><span id="repeatIcon" class="control-icon">↻</span></button>
 <button id="speedBtn" class="control-btn mode" type="button" title="Playback speed">1×</button>
-<button id="volumeBtn" class="control-btn mode" type="button" title="Volume"><span class="control-icon">◖)</span></button>
+<button id="volumeBtn" class="control-btn mode" type="button" title="Volume"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
 </div>
 <div id="volumePopup" class="volume-popup"><button id="muteBtn" class="volume-mute" type="button"><span id="muteIcon">◖)</span></button><input id="volume" type="range" min="0" max="100" value="100" step="1"></div>
 <div id="status">Ready</div>
@@ -796,6 +818,20 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <button id="saveEdit" class="pbtn">Save</button><button id="closeEdit" class="pbtn alt">Close</button>
 </div></dialog>
 
+<dialog id="diagDlg"><div class="card">
+<h2>Diagnostics</h2>
+<div class="small-note">What the player noticed recently. After it stops with the screen off, open this and send the last lines.</div>
+<textarea id="diagText" class="in" rows="12" readonly style="font-size:12px"></textarea>
+<button id="diagCopy" class="pbtn">Copy</button><button id="diagClear" class="pbtn alt">Clear</button><button id="diagClose" class="pbtn alt">Close</button>
+</div></dialog>
+
+<dialog id="logDlg"><div class="card">
+<h2>Playback log</h2>
+<div class="small-note">Play a few songs, lock the screen, and if it stops, open this and send it to me.</div>
+<pre id="logTxt" style="max-height:45vh;overflow:auto;font-size:11px;white-space:pre-wrap;margin:0;color:var(--text-soft)"></pre>
+<button id="copyLog" class="pbtn" type="button">Copy</button><button id="clearLog" class="pbtn alt" type="button">Clear</button><button id="closeLog" class="pbtn alt" type="button">Close</button>
+</div></dialog>
+
 <audio id="audio" preload="none"></audio>
 <script>
 const API="https://script.google.com/macros/s/AKfycbx4gweauM57S973B6IRLV8CAHwBx3w94eKyLg6aV6OfrwAU7V9erESaJ4gfsvXcZp_D/exec";
@@ -807,6 +843,9 @@ const $=id=>document.getElementById(id),au=$("audio");
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ls=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
 const sv=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+const SV=(p,w)=>'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="'+(w||1.5)+'" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+const IC={play:SV('<polygon points="7 5 18 12 7 19 7 5"/>',1.3),pause:SV('<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>',1.3),repeat:SV('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>')};
+function repIcon(){$("repeatIcon").innerHTML=IC.repeat+(repeat==="one"?'<b class="rep1">1</b>':"")}
 let token=localStorage.getItem("jmToken"),me=null,songs=[],queue=[],now=null,folder="All Songs",plView=null,q="",shuffle=false,repeat="all",fav=[],rec=[],pls=[],plSong=null;
 let loadId=0,ctl=null,want=false,loadedId=null,trying=false,noDirect=0,lastFail=0;
 const cache=new Map(),pend=new Map(),pfc=new Map();
@@ -843,7 +882,7 @@ $("doForgot").onclick=async()=>{
   alert("Password changed.\n\nNEW RECOVERY CODE:\n"+j.recoveryCode+"\n\nSave it somewhere safe.");
   $("forgotDlg").close();token=j.token;localStorage.setItem("jmToken",token);start();
 };
-function stopAll(){
+function stopAll(){try{teardownStream()}catch(e){}
   loadId++;
   if(ctl){try{ctl.abort()}catch(e){}ctl=null}
   pfc.forEach(c=>{try{c.abort()}catch(e){}});pfc.clear();pend.clear();
@@ -1042,6 +1081,15 @@ async function load(s,prog,sig){
   })().finally(()=>pend.delete(s.id));
   pend.set(s.id,pr);return pr;
 }
+async function fetchDirect(s,sig,prog){ // download the whole song from Drive into the phone's memory
+  const r=await fetch(DIRECT(s.fileId),{signal:sig});
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const total=+r.headers.get("content-length")||0;
+  if(!r.body||!total||!prog){const b=await r.blob();return URL.createObjectURL(new Blob([b],{type:s.mime||b.type||"audio/mpeg"}))}
+  const rd=r.body.getReader(),parts=[];let got=0;
+  for(;;){const x=await rd.read();if(x.done)break;parts.push(x.value);got+=x.value.length;prog(got/total)}
+  return URL.createObjectURL(new Blob(parts,{type:s.mime||"audio/mpeg"}));
+}
 let pfBusy=false,shufNext=null,directFetchBad=false;
 function peekNext(k){ // the song that follows (k=0) or the one after it (k=1)
   if(!now||queue.length<2)return null;
@@ -1075,10 +1123,7 @@ async function prefetch(){ // download the next two songs while this one plays, 
       try{
         if(canDirect(n)&&!directFetchBad){
           try{
-            const r=await fetch(DIRECT(n.fileId),{signal:c.signal});
-            if(!r.ok)throw new Error("HTTP "+r.status);
-            const b=await r.blob();
-            putCache(n.id,URL.createObjectURL(new Blob([b],{type:n.mime||b.type||"audio/mpeg"})));
+            putCache(n.id,await fetchDirect(n,c.signal));
           }catch(e){if(e.name==="AbortError")throw e;directFetchBad=true;await load(n,null,c.signal)}
         }else await load(n,null,c.signal);
       }catch(e){if(e.name==="AbortError")break}
@@ -1105,6 +1150,7 @@ function markActive(){
 async function play(s){
   if(!s)return;
   const my=++loadId;loadedId=null;
+  teardownStream();
   if(ctl){try{ctl.abort()}catch(e){}}
   pfc.forEach((c,id)=>{if(id!==s.id){try{c.abort()}catch(e){}pfc.delete(id);pend.delete(id)}});
   ctl=new AbortController();const sig=ctl.signal;
@@ -1124,10 +1170,28 @@ async function play(s){
   }catch(e){}}
   if(folder==="Recent"&&plView===null)refresh();else markActive();
   try{navigator.mediaSession.playbackState="playing"}catch(e){}
+  if(streamOK(s)){
+    const r=await startStream(s,my);
+    if(my!==loadId||!want)return;
+    if(r)return;
+    dbg("stream mode failed - using classic mode");
+  }
   if(cache.has(s.id)){ // already on the phone: starts at once, no internet needed
     const u=cache.get(s.id);cache.delete(s.id);cache.set(s.id,u);
-    au.src=u;loadedId=s.id;au.play().catch(()=>{$("status").textContent="Tap ▶ to continue"});
-    $("status").textContent="Playing";act("PLAY",s.title+" — "+s.artist);prefetch();return;
+    au.src=u;loadedId=s.id;au.play().catch(e=>{logEv("play-rejected",e.name);$("status").textContent="Tap ▶ to continue";try{navigator.mediaSession.playbackState="paused"}catch(x){}setTimeout(()=>{if(want&&au.paused&&loadedId===s.id)au.play().catch(()=>{})},800)});
+    logEv("start","from phone memory");$("status").textContent="Playing";act("PLAY",s.title+" — "+s.artist);prefetch();return;
+  }
+  if(canDirect(s)&&!directFetchBad){ // download the whole song first, so playing it needs no internet
+    let u=null;
+    try{u=await fetchDirect(s,sig,f=>{if(my===loadId)$("status").textContent="Loading "+Math.round(f*100)+"%"})}
+    catch(e){if(e.name==="AbortError")return;directFetchBad=true;logEv("direct-download-failed",String(e.message||e))}
+    if(u){
+      if(my!==loadId||!want)return;
+      putCache(s.id,u);au.src=u;loadedId=s.id;
+      try{await au.play()}catch(e){logEv("play-rejected",e.name);if(my===loadId)$("status").textContent="Tap ▶ to continue";return}
+      if(my!==loadId||!want)return;
+      $("status").textContent="Playing";act("PLAY",s.title+" — "+s.artist);logEv("start","downloaded");prefetch();return;
+    }
   }
   if(canDirect(s)){
     const ok=await tryDirect(s);
@@ -1149,6 +1213,14 @@ async function play(s){
   }
 }
 function step(dir){
+  if(msMode&&seq.length){ // inside the continuous stream: jump without stopping the audio
+    const i=curIdx(),c=seq[i];
+    if(dir>0&&seq[i+1]){au.currentTime=seq[i+1].start+0.02;streamTick();return}
+    if(dir<0){
+      if(au.currentTime-c.start>3){au.currentTime=c.start+0.02;streamTick();return}
+      if(seq[i-1]){au.currentTime=seq[i-1].start+0.02;streamTick();return}
+    }
+  }
   if(!queue.length)return;
   let i=queue.findIndex(s=>now&&s.id===now.id);
   if(i<0)i=dir>0?-1:0;
@@ -1168,20 +1240,23 @@ $("playBtn").onclick=()=>{
   if(loadedId===now.id){au.play().catch(()=>play(now))}else play(now);
 };
 $("nextBtn").onclick=()=>step(1);
-$("prevBtn").onclick=()=>{if(au.currentTime>3){au.currentTime=0;return}step(-1)};
-au.onplay=()=>$("playIcon").textContent="❚❚";
-au.onpause=()=>$("playIcon").textContent="▶";
+$("prevBtn").onclick=()=>{if(!msMode&&au.currentTime>3){au.currentTime=0;return}step(-1)};
+au.onplay=()=>$("playIcon").innerHTML=IC.pause;
+au.onpause=()=>$("playIcon").innerHTML=IC.play;
 au.onended=()=>{if(sleepEnd){sleepClear("Sleep timer: song finished");want=false;return}if(!want)return;if(repeat==="one"){au.currentTime=0;au.play()}else step(1)};
-au.onerror=()=>{if(now&&want&&au.src&&!trying)$("status").textContent="Audio format not supported"};
+au.onerror=()=>{if(msMode){msEnabled=false;dbg("stream decode error - switching to classic mode");const s0=now;teardownStream();if(s0&&want)play(s0);return}if(now&&want&&au.src&&!trying)$("status").textContent="Audio format not supported"};
 $("shuffleBtn").onclick=e=>{shuffle=!shuffle;e.currentTarget.classList.toggle("active",shuffle)};
 $("repeatBtn").onclick=()=>{
   repeat=repeat==="all"?"one":"all";
-  $("repeatIcon").textContent=repeat==="all"?"↻":"↻1";
+  repIcon();
   $("repeatBtn").title=repeat==="all"?"Repeat All":"Repeat One";
 };
 const fmt=t=>isFinite(t)?Math.floor(t/60)+":"+String(Math.floor(t%60)).padStart(2,"0"):"0:00";
 au.ontimeupdate=()=>{$("currentTime").textContent=fmt(au.currentTime);$("duration").textContent=fmt(au.duration);if(au.duration)$("progress").value=au.currentTime/au.duration*100};
-$("progress").oninput=e=>{if(au.duration)au.currentTime=e.target.value/100*au.duration};
+$("progress").oninput=e=>{
+  if(msMode&&seq.length){const c=seq[curIdx()];if(isFinite(c.end))au.currentTime=c.start+e.target.value/100*(c.end-c.start);return}
+  if(au.duration)au.currentTime=e.target.value/100*au.duration;
+};
 $("volumeBtn").onclick=()=>$("volumePopup").classList.toggle("open");
 $("volume").oninput=e=>{au.volume=e.target.value/100;au.muted=false;$("muteIcon").textContent=au.volume?"◖)":"◖×"};
 $("muteBtn").onclick=()=>{au.muted=!au.muted;$("muteIcon").textContent=au.muted?"◖×":"◖)"};
@@ -1270,7 +1345,7 @@ applySpeed();
 
 try{
   if(localStorage.getItem("jmShuffle")==="1"){shuffle=true;$("shuffleBtn").classList.add("active")}
-  if(localStorage.getItem("jmRepeat")==="one"){repeat="one";$("repeatIcon").textContent="↻1";$("repeatBtn").title="Repeat One"}
+  if(localStorage.getItem("jmRepeat")==="one"){repeat="one";repIcon();$("repeatBtn").title="Repeat One"}
   const vv=localStorage.getItem("jmVol");if(vv!==null){au.volume=+vv/100;$("volume").value=vv}
 }catch(e){}
 $("shuffleBtn").addEventListener("click",()=>{try{localStorage.setItem("jmShuffle",shuffle?"1":"0")}catch(e){}});
@@ -1286,6 +1361,7 @@ function resumeLast(){
   if(s&&!now){now=s;$("nowPlaying").textContent=s.title+" — "+s.artist;$("status").textContent="Tap ▶ to continue";refresh()}
 }
 function posState(){
+  if(msMode){streamPos();return}
   if("mediaSession"in navigator&&isFinite(au.duration)&&au.duration>0){
     try{navigator.mediaSession.setPositionState({duration:au.duration,playbackRate:au.playbackRate||1,position:Math.min(au.currentTime,au.duration)})}catch(e){}
   }
@@ -1356,6 +1432,187 @@ fillBar($("volume"));
 document.addEventListener("visibilitychange",()=>{
   if(!document.hidden&&want&&now&&au.paused&&loadedId===now.id&&!au.ended)$("status").textContent="Paused by the phone - tap ▶ to continue";
 });
+
+
+/* ---------- screen-off mode: one continuous stream (MP3) so playback never stops between songs ---------- */
+let msEnabled=localStorage.getItem("jmStream")!=="0",msMode=false,ms=null,sb=null,msUrl=null,seq=[],streamGen=0,sctl=null,topBusy=false,lastTop=0,feedChain=Promise.resolve();
+const AHEAD=3;
+const dbgBuf=(()=>{try{return JSON.parse(localStorage.getItem("jmDbg")||"[]")}catch(e){return[]}})();
+function dbg(m){try{dbgBuf.push(new Date().toTimeString().slice(0,8)+" "+m);while(dbgBuf.length>80)dbgBuf.shift();localStorage.setItem("jmDbg",JSON.stringify(dbgBuf))}catch(e){}}
+const streamOK=s=>msEnabled&&repeat!=="one"&&!!window.MediaSource&&MediaSource.isTypeSupported("audio/mpeg")&&/mpeg|mp3/i.test(s.mime||"audio/mpeg");
+function bufEnd(){return sb&&sb.buffered.length?sb.buffered.end(sb.buffered.length-1):0}
+function teardownStream(){
+  streamGen++;
+  if(sctl){try{sctl.abort()}catch(e){}sctl=null}
+  try{if(ms&&ms.readyState==="open")ms.endOfStream()}catch(e){}
+  if(msUrl){try{URL.revokeObjectURL(msUrl)}catch(e){}msUrl=null}
+  ms=null;sb=null;seq=[];msMode=false;topBusy=false;feedChain=Promise.resolve();
+}
+function sbOp(fn,gen){ // one SourceBuffer operation at a time
+  const run=()=>new Promise((res,rej)=>{
+    if(gen!==streamGen||!sb)return rej(new Error("stale"));
+    const done=()=>{sb.removeEventListener("error",bad);res()},bad=()=>{sb.removeEventListener("updateend",done);rej(new Error("buffer error"))};
+    sb.addEventListener("updateend",done,{once:true});sb.addEventListener("error",bad,{once:true});
+    try{fn()}catch(e){sb.removeEventListener("updateend",done);sb.removeEventListener("error",bad);rej(e)}
+  });
+  feedChain=feedChain.then(run,run);return feedChain;
+}
+const feed=(buf,gen)=>sbOp(()=>sb.appendBuffer(buf),gen);
+function endStream(gen){feedChain=feedChain.then(()=>{try{if(gen===streamGen&&ms&&ms.readyState==="open"&&sb&&!sb.updating)ms.endOfStream()}catch(e){}})}
+async function bytesFor(s,sig,prog){
+  if(cache.has(s.id)){try{return await (await fetch(cache.get(s.id))).arrayBuffer()}catch(e){}}
+  if(canDirect(s)&&!directFetchBad){
+    try{const r=await fetch(DIRECT(s.fileId),{signal:sig});if(!r.ok)throw new Error("HTTP "+r.status);return await r.arrayBuffer()}
+    catch(e){if(e.name==="AbortError")throw e;directFetchBad=true;dbg("direct download failed: "+(e.message||e))}
+  }
+  const u=await load(s,prog||null,sig);return await (await fetch(u)).arrayBuffer();
+}
+async function startStream(s,my){
+  teardownStream();
+  const gen=streamGen;
+  try{
+    ms=new MediaSource();msUrl=URL.createObjectURL(ms);msMode=true;au.src=msUrl;
+    await new Promise((res,rej)=>{ms.addEventListener("sourceopen",res,{once:true});setTimeout(()=>rej(new Error("MediaSource did not open")),4000)});
+    if(gen!==streamGen)return true;
+    sb=ms.addSourceBuffer("audio/mpeg");
+    sctl=new AbortController();
+    seq=[{s:s,start:0,end:Infinity}];
+    let began=false,ok=false;
+    const begin=()=>{
+      if(began||gen!==streamGen)return;began=true;loadedId=s.id;
+      au.play().catch(e=>{dbg("play rejected: "+e.name);$("status").textContent="Tap ▶ to continue"});
+      $("status").textContent="Playing";act("PLAY",s.title+" — "+s.artist);dbg("stream started: "+s.title);
+    };
+    if(canDirect(s)&&!directFetchBad){
+      try{
+        const r=await fetch(DIRECT(s.fileId),{signal:sctl.signal});
+        if(!r.ok)throw new Error("HTTP "+r.status);
+        const rd=r.body.getReader();
+        for(;;){
+          const x=await rd.read();if(x.done)break;
+          await feed(x.value.slice().buffer,gen);begin();
+        }
+        ok=true;
+      }catch(e){
+        if(gen!==streamGen)return true;
+        if(began)throw e;
+        directFetchBad=true;dbg("direct download failed: "+(e.message||e));
+      }
+    }
+    if(!ok){
+      const buf=await bytesFor(s,sctl.signal,f=>{if(gen===streamGen&&!began)$("status").textContent="Loading "+Math.round(f*100)+"%"});
+      if(gen!==streamGen)return true;
+      await feed(buf,gen);begin();
+    }
+    if(gen!==streamGen)return true;
+    seq[0].end=bufEnd();
+    topUp();
+    return true;
+  }catch(e){
+    if(gen!==streamGen)return true;
+    dbg("stream error: "+(e.message||e));teardownStream();return false;
+  }
+}
+function pickAfter(last){
+  if(repeat==="one"||queue.length<2)return null;
+  if(shuffle){let n;do{n=queue[Math.floor(Math.random()*queue.length)]}while(n.id===last.id);return n}
+  const i=queue.findIndex(x=>x.id===last.id);
+  return queue[i<0?0:(i+1)%queue.length];
+}
+async function appendTrack(n,gen){
+  const buf=await bytesFor(n,sctl&&sctl.signal);
+  if(gen!==streamGen)return false;
+  const start=bufEnd();
+  await feed(buf,gen);
+  if(gen!==streamGen)return false;
+  seq.push({s:n,start:start,end:bufEnd()});dbg("queued: "+n.title);
+  return true;
+}
+function curIdx(){const t=au.currentTime;for(let i=seq.length-1;i>=0;i--)if(t>=seq[i].start-0.05)return i;return 0}
+async function topUp(){
+  if(!msMode||topBusy||!seq.length)return;topBusy=true;lastTop=Date.now();const gen=streamGen;
+  try{
+    while(msMode&&gen===streamGen&&seq.length-1-curIdx()<AHEAD){
+      const n=pickAfter(seq[seq.length-1].s);
+      if(!n)break;
+      if(!await appendTrack(n,gen))break;
+    }
+    if(gen===streamGen)endStream(gen);
+  }catch(e){if(gen===streamGen)dbg("top-up stopped: "+(e.message||e))}
+  finally{if(gen===streamGen)topBusy=false}
+}
+function prune(){
+  const i=curIdx();
+  if(i>1&&seq[i-1].start>0.3){
+    const keep=seq[i-1].start-0.1;seq.splice(0,i-1);
+    sbOp(()=>sb.remove(0,keep),streamGen).catch(()=>{});
+  }
+}
+function trackChanged(s){
+  now=s;loadedId=s.id;shufNext=null;
+  $("nowPlaying").textContent=s.title+" — "+s.artist;
+  rec=[s.id,...rec.filter(x=>x!==s.id)].slice(0,30);sv("jmRec_"+me.name,rec);
+  try{localStorage.setItem("jmLast_"+me.name,s.id)}catch(e){}
+  try{navigator.mediaSession.metadata=new MediaMetadata({title:s.title,artist:s.artist,album:"Jus Music"})}catch(e){}
+  if(folder==="Recent"&&plView===null)refresh();else markActive();
+  $("status").textContent="Playing";act("PLAY",s.title+" — "+s.artist);dbg("now playing: "+s.title);
+  prune();topUp();
+}
+function streamTick(){
+  if(!msMode||!seq.length)return;
+  const i=curIdx(),c=seq[i],t=Math.max(0,au.currentTime-c.start),dur=isFinite(c.end)?c.end-c.start:0;
+  if(now&&c.s.id!==now.id)trackChanged(c.s);
+  $("currentTime").textContent=fmt(t);$("duration").textContent=dur?fmt(dur):"0:00";
+  if(dur){$("progress").value=Math.min(100,t/dur*100);fillBar($("progress"))}
+  if(dur&&dur-t<0.35){
+    if(sleepEnd){sleepClear("Sleep timer: song finished");want=false;au.pause()}
+    else if(repeat==="one")au.currentTime=c.start+0.02;
+  }
+  if(seq.length-1-i<AHEAD&&Date.now()-lastTop>3000)topUp();
+}
+function streamPos(){
+  const c=seq[curIdx()];
+  if(c&&isFinite(c.end)&&"mediaSession"in navigator&&navigator.mediaSession.setPositionState){
+    try{navigator.mediaSession.setPositionState({duration:c.end-c.start,playbackRate:au.playbackRate||1,position:Math.max(0,Math.min(au.currentTime-c.start,c.end-c.start))})}catch(e){}
+  }
+}
+const _tu3=au.ontimeupdate;au.ontimeupdate=()=>{_tu3();if(msMode)streamTick()};
+setInterval(()=>{if(msMode)streamTick()},5000); // keeps the queue topped up even when the phone slows the page down
+
+function streamLabel(){$("mStream").textContent="🔋 Screen-off mode: "+(msEnabled?"ON":"OFF")}
+$("mStream").onclick=()=>{msEnabled=!msEnabled;try{localStorage.setItem("jmStream",msEnabled?"1":"0")}catch(e){}streamLabel();$("status").textContent="Screen-off mode "+(msEnabled?"on":"off")+" - applies from the next song"};
+streamLabel();
+$("mDiag").onclick=()=>{$("mobileMenu").classList.remove("open");$("diagText").value=dbgBuf.join("\n")||"(nothing recorded yet)";$("diagDlg").showModal()};
+$("diagClose").onclick=()=>$("diagDlg").close();
+$("diagClear").onclick=()=>{dbgBuf.length=0;try{localStorage.removeItem("jmDbg")}catch(e){}$("diagText").value=""};
+$("diagCopy").onclick=()=>{try{navigator.clipboard.writeText($("diagText").value)}catch(e){$("diagText").select()}};
+document.addEventListener("visibilitychange",()=>dbg(document.hidden?"screen off / app hidden":"screen on"));
+addEventListener("online",()=>dbg("network online"));addEventListener("offline",()=>dbg("network offline"));
+["ended","pause","play","waiting","stalled"].forEach(n=>au.addEventListener(n,()=>dbg("audio "+n+(n==="pause"?" (want="+want+")":""))));
+au.addEventListener("error",()=>dbg("audio error "+(au.error&&au.error.code)));
+
+
+/* ---------- playback log: records what the phone does, so a stop can be diagnosed ---------- */
+const LOGK="jmLog";
+function logEv(ev,info){
+  try{
+    const a=JSON.parse(localStorage.getItem(LOGK)||"[]");
+    a.push(new Date().toTimeString().slice(0,8)+" "+ev+(info?" "+info:"")+(document.hidden?" [screen off]":""));
+    while(a.length>100)a.shift();
+    localStorage.setItem(LOGK,JSON.stringify(a));
+  }catch(e){}
+}
+["ended","pause","playing","waiting","stalled","error","emptied"].forEach(n=>au.addEventListener(n,()=>logEv("audio:"+n,n==="error"&&au.error?"code "+au.error.code:"")));
+document.addEventListener("visibilitychange",()=>{logEv("page",document.hidden?"hidden":"visible");if(!document.hidden)directFetchBad=false});
+document.addEventListener("freeze",()=>logEv("page","FROZEN by Chrome"));
+document.addEventListener("resume",()=>logEv("page","resumed"));
+window.addEventListener("online",()=>{logEv("network","online");directFetchBad=false});
+window.addEventListener("offline",()=>logEv("network","offline"));
+function showLog(){$("logTxt").textContent=(JSON.parse(localStorage.getItem(LOGK)||"[]").join("\n"))||"(empty)";$("logDlg").showModal()}
+$("mLog").onclick=()=>{$("mobileMenu").classList.remove("open");showLog()};
+$("copyLog").onclick=async()=>{try{await navigator.clipboard.writeText($("logTxt").textContent);$("copyLog").textContent="Copied"}catch(e){$("copyLog").textContent="Select and copy by hand"}setTimeout(()=>$("copyLog").textContent="Copy",1500)};
+$("clearLog").onclick=()=>{localStorage.removeItem(LOGK);$("logTxt").textContent="(empty)"};
+$("closeLog").onclick=()=>$("logDlg").close();
 
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 if(token)start();else $("auth").classList.remove("hide");
