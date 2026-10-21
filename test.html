@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>Jus Music (test)</title>
+<style>html,body{background:#09090b;color:#a7a7ad;font-family:sans-serif;margin:0;padding:24px}</style>
+</head>
+<body>
+Loading test version...
+<script>
+/* TEST PAGE: loads your normal index.html and adds jus-online.js on top.
+   index.html itself is NOT changed, so your live player stays exactly as it is. */
+fetch("index.html", { cache: "no-store" })
+  .then(function (r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.text();
+  })
+  .then(function (html) {
+    html = html.replace("</body>",
+      '<script src="jus-online.js"><\/script>' +
+      '<script src="jus-features.js"><\/script></body>');
+    document.open();
+    document.write(html);
+    document.close();
+  })
+  .catch(function (e) {
+    document.body.textContent = "Could not load the test page: " + e.message;
+  });
+</script>
+</body>
+</html>
