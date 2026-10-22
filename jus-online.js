@@ -64,15 +64,40 @@
 
   function first(v) { return Array.isArray(v) ? v[0] : v; }
 
+  // "K.k bollywood" -> "Kk bollywood" (dots between single letters are dropped)
+  function normQuery(q) {
+    return String(q || "")
+      .replace(/\b([A-Za-z])\.(?=[A-Za-z]\b)/g, "$1")
+      .replace(/["():\[\]{}^~*?\\\/]/g, " ")
+      .replace(/\s+/g, " ").trim();
+  }
+
+  function queryTerms(q) {
+    return normQuery(q).toLowerCase().split(/[\s.]+/).filter(function (t) { return t.length >= 2; });
+  }
+
+  function relevance(item, words) {
+    var hay = normQuery(String(item.title || "") + " " + String(item.artist || ""))
+      .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ");
+    var n = 0;
+    words.forEach(function (w) { if (hay.indexOf(w) >= 0) n++; });
+    return n;
+  }
+
+  // best matches first; items with the same score keep their order
+  function rankItems(items, q) {
+    var words = queryTerms(q);
+    if (!words.length) return items;
+    return items.map(function (it, i) { return { it: it, i: i, s: relevance(it, words) }; })
+      .sort(function (a, b) { return b.s - a.s || a.i - b.i; })
+      .map(function (x) { return x.it; });
+  }
+
   // ---------- Internet Archive ----------
-  async function searchIA(q) {
-    q = String(q || "").replace(/["():\[\]{}^~*?\\\/]/g, " ").replace(/\s+/g, " ").trim();
-    var query = q
-      ? "(" + q + ") AND mediatype:audio"
-      : "mediatype:audio AND collection:opensource_audio";
+  async function iaFetch(query, byDownloads) {
     var u = "https://archive.org/advancedsearch.php?q=" + encodeURIComponent(query) +
       "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator" +
-      "&sort%5B%5D=" + encodeURIComponent("downloads desc") +
+      (byDownloads ? "&sort%5B%5D=" + encodeURIComponent("downloads desc") : "") +
       "&rows=30&page=1&output=json";
     var j = await wj(u);
     var docs = (j.response && j.response.docs) || [];
@@ -83,6 +108,20 @@
         artist: first(d.creator) || "Internet Archive"
       };
     });
+  }
+
+  async function searchIA(q) {
+    var words = normQuery(q).split(" ").filter(Boolean);
+    if (!words.length) return iaFetch("mediatype:audio AND collection:opensource_audio", true);
+    // every word must match first; if that finds very little, allow any word
+    var out = await iaFetch("(" + words.join(" AND ") + ") AND mediatype:audio", false);
+    if (out.length < 5 && words.length > 1) {
+      var more = await iaFetch("(" + words.join(" OR ") + ") AND mediatype:audio", false);
+      var seen = {};
+      out.forEach(function (x) { seen[x.key] = 1; });
+      more.forEach(function (x) { if (!seen[x.key]) out.push(x); });
+    }
+    return rankItems(out, q);
   }
 
   async function openIA(album) {
@@ -115,7 +154,7 @@
 
   // ---------- Openverse (searches several open-licence audio libraries) ----------
   async function searchOV(q) {
-    q = String(q || "").trim();
+    q = normQuery(q);
     if (!q) return [];
     var base = "https://api.openverse.org/v1/audio/?page_size=20&q=" + encodeURIComponent(q);
     var j;
@@ -143,7 +182,7 @@
   async function searchJam(q) {
     var k = jamKey();
     if (!k) throw new Error("NOKEY");
-    q = String(q || "").trim();
+    q = normQuery(q);
     var u = "https://api.jamendo.com/v3.0/tracks/?client_id=" + encodeURIComponent(k) +
       "&format=json&limit=40&audioformat=mp32";
     u += q ? "&search=" + encodeURIComponent(q) : "&order=popularity_week";
@@ -170,7 +209,7 @@
   }
 
   async function searchRadio(q) {
-    q = String(q || "").trim();
+    q = normQuery(q);
     var base = "&hidebroken=true&order=clickcount&reverse=true&limit=40";
     var paths = q
       ? ["name", "tag", "language"].map(function (k) {
@@ -221,6 +260,7 @@
       }
       idx++;
     }
+    out = rankItems(out, q);
     return { items: out, failed: failed, allFailed: failed.length === jobs.length };
   }
 
@@ -266,7 +306,8 @@
   if (TEST) {
     globalThis.__jm = {
       searchIA: searchIA, openIA: openIA, searchJam: searchJam, searchRadio: searchRadio,
-      searchOV: searchOV, searchAll: searchAll, resolveLink: resolveLink
+      searchOV: searchOV, searchAll: searchAll, resolveLink: resolveLink,
+      normQuery: normQuery, queryTerms: queryTerms, rankItems: rankItems
     };
     return;
   }
@@ -414,12 +455,15 @@
     "#netView{display:none}",
     "body.net-mode #netView{display:block}",
     ".scope-row{display:flex;gap:8px;margin-top:10px}",
-    ".scope-row .chip{flex:1;padding:9px 12px;font-size:14px;text-align:center}",
-    ".net-sources{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}",
-    ".net-sources::-webkit-scrollbar{display:none}",
-    ".net-sources .chip{flex:0 0 auto;padding:8px 13px;font-size:13px}",
-    "#netList{display:grid;gap:9px}",
-    ".web-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:16px;background:linear-gradient(145deg,var(--surface-2),var(--surface));cursor:pointer;min-height:62px}",
+    ".scope-row .chip{flex:1;padding:8px 10px;font-size:14px;text-align:center}",
+    "html,body{max-width:100%;overflow-x:hidden}",
+    "main{min-width:0}",
+    "#netView{max-width:100%;min-width:0}",
+    ".net-sources{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 10px}",
+    ".net-sources .chip{flex:0 0 auto;padding:7px 12px;font-size:13px}",
+    "#netList{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;min-width:0;max-width:100%}",
+    "#netBackBtn{width:100%}",
+    ".web-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:16px;background:linear-gradient(145deg,var(--surface-2),var(--surface));cursor:pointer;min-height:62px;min-width:0;width:100%;box-sizing:border-box}",
     ".web-item.on{border-color:rgba(155,92,255,.55);background:rgba(155,92,255,.12)}",
     "body.themed .web-item.on{border-color:rgba(var(--acc),.55);background:rgba(var(--acc),.10)}",
     ".web-info{flex:1;min-width:0}",
@@ -629,6 +673,7 @@
           : netSrc === "ov" ? await searchOV(query)
           : netSrc === "jam" ? await searchJam(query) : await searchRadio(query);
         if (my !== netBusy) return;
+        items = rankItems(items, query);
         msg.textContent = items.length ? "" : (netSrc === "ov" && !query ? "Type a word to search Openverse." : "No results. Try another word.");
       }
       netItems = items;
@@ -700,7 +745,7 @@
   }
 
   mount();
-  window.__jmOnline = "2";
-  dlog("add-on v2 loaded");
-  console.log("Jus Music online add-on v2 ready");
+  window.__jmOnline = "2.1";
+  dlog("add-on v2.1 loaded");
+  console.log("Jus Music online add-on v2.1 ready");
 })();
