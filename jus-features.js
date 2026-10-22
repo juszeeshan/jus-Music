@@ -1,5 +1,5 @@
 /*
- * JUS MUSIC - FEATURES ADD-ON (v2.2)   file: jus-features.js
+ * JUS MUSIC - FEATURES ADD-ON (v2.3)   file: jus-features.js
  *
  * REPLACES the earlier jus-features.js (same file name, new content).
  *
@@ -474,6 +474,13 @@
     "body.themed .playlist-card:hover{border-color:rgba(var(--acc),.5)}",
     /* clean header: only brand, search and the ⋮ menu */
     ".desktop-action{display:none!important}",
+    /* the "All Songs | Sort | Playlists" row: same height, one line, evenly shared */
+    "html,body{max-width:100%;overflow-x:hidden}",
+    ".library-bar{display:flex;align-items:stretch;gap:8px;flex-wrap:nowrap}",
+    ".library-bar .library-select,.library-bar .sort-sel,.library-bar .playlist-open-btn{height:46px;box-sizing:border-box;margin:0!important;padding:0 12px;font-size:14px;line-height:1.1}",
+    ".library-bar .library-select{flex:1 1 0;min-width:0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}",
+    ".library-bar .sort-sel{flex:1 1 0;min-width:0;max-width:none!important}",
+    ".library-bar .playlist-open-btn{flex:0 0 auto;white-space:nowrap}",
     /* simple player */
     ".controls2{display:none!important}",
     "body,body.light{--player-height:178px!important}",
@@ -1045,7 +1052,7 @@
   if (!savedTheme) savedTheme = document.body.classList.contains("light") ? "light" : "purple";
   applyTheme(savedTheme);
   try { refresh(); } catch (e) {}
-  window.__jmFeatures = "2.2";
-  dlog("add-on v2.2 loaded");
-  console.log("Jus Music features add-on v2.2 ready");
+  window.__jmFeatures = "2.3";
+  dlog("add-on v2.3 loaded");
+  console.log("Jus Music features add-on v2.3 ready");
 })();
