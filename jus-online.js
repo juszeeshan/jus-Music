@@ -1,25 +1,23 @@
 /*
- * JUS MUSIC - ONLINE MUSIC ADD-ON (jus-online.js, v1)
+ * JUS MUSIC - ONLINE MUSIC ADD-ON (v2)   file: jus-online.js
  *
- * Plays free / legal music by LINK from:
- *   - Internet Archive  (no key needed)
- *   - Jamendo           (free client ID needed, see JAMENDO_ID below)
- *   - Live radio        (radio-browser.info directory, https stations only)
+ * REPLACES the earlier jus-online.js (same file name, new content).
  *
- * NOTHING is uploaded or stored in your Drive, so it uses no storage.
- * This file does not change your player's code. It plugs into it.
- * If it fails to load, the normal player keeps working.
+ * The normal 🔍 search now has two modes:  [My library]  [Online]
+ * In Online mode one search looks in several free / legal places at once:
+ *   - Internet Archive   (no key)
+ *   - Openverse          (no key; many open-licence music libraries)
+ *   - Jamendo            (free client ID, see JAMENDO_ID below)
+ *   - Live radio         (radio-browser.info, https stations)
+ * Extra tabs: ♥ Saved, 🔗 Link (paste a direct audio link), 🌍 Sites (more places to find music).
  *
- * To remove it: delete the <script src="jus-online.js"> line.
+ * NOTHING is uploaded or stored in your Drive. If this file fails to load,
+ * the normal player keeps working.
  */
 (function () {
 
-  /* ------------------------------------------------------------
-   * OPTIONAL: paste your free Jamendo client ID between the quotes
-   * so every user can search Jamendo. If left empty, each person
-   * can paste their own key inside the Online music window.
-   * Get one free at https://devportal.jamendo.com
-   * ------------------------------------------------------------ */
+  /* Optional: paste your free Jamendo client ID (devportal.jamendo.com) so every
+     user can search Jamendo. Otherwise each person can paste their own key. */
   var JAMENDO_ID = "";
 
   var RADIO_HOSTS = [
@@ -29,10 +27,21 @@
     "https://de2.api.radio-browser.info"
   ];
 
+  var SRC_NAME = { ia: "Internet Archive", ov: "Openverse", jam: "Jamendo", radio: "Live radio", link: "Link" };
+
+  var SITES = [
+    { n: "Internet Archive · Audio", d: "Huge free library: music, old records, live recordings.", u: "https://archive.org/details/audio" },
+    { n: "Openverse · Audio", d: "Search engine for openly licensed audio from many sites.", u: "https://openverse.org/search/audio" },
+    { n: "Jamendo", d: "Independent artists, free to listen.", u: "https://www.jamendo.com" },
+    { n: "Free Music Archive", d: "Free and open-licensed music.", u: "https://freemusicarchive.org" },
+    { n: "ccMixter", d: "Tracks and remixes under Creative Commons.", u: "https://ccmixter.org" },
+    { n: "Musopen", d: "Public-domain classical music.", u: "https://musopen.org" }
+  ];
+
   var TEST = typeof __JM_TEST__ !== "undefined";
 
   /* ============================================================
-   * SEARCH FUNCTIONS (no page access, easy to test)
+   * SEARCH + LINK FUNCTIONS (no page access, easy to test)
    * ============================================================ */
 
   function esc2(t) {
@@ -46,7 +55,7 @@
     var t = setTimeout(function () { c.abort(); }, ms || 12000);
     try {
       var r = await fetch(url, { signal: c.signal });
-      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (!r.ok) { var e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
       return await r.json();
     } finally {
       clearTimeout(t);
@@ -100,6 +109,26 @@
         artist: album.title || "Internet Archive",
         url: "https://archive.org/download/" + encodeURIComponent(id) + "/" +
           nm.split("/").map(encodeURIComponent).join("/")
+      };
+    });
+  }
+
+  // ---------- Openverse (searches several open-licence audio libraries) ----------
+  async function searchOV(q) {
+    q = String(q || "").trim();
+    if (!q) return [];
+    var base = "https://api.openverse.org/v1/audio/?page_size=20&q=" + encodeURIComponent(q);
+    var j;
+    try { j = await wj(base + "&category=music"); }
+    catch (e) {
+      if (e && e.status === 400) j = await wj(base);   // filter not accepted: search without it
+      else throw e;
+    }
+    return (j.results || []).filter(function (r) { return r.url; }).map(function (r) {
+      return {
+        kind: "track", online: true, src: "ov",
+        id: "web:ov:" + r.id, title: r.title || "Untitled",
+        artist: r.creator || r.provider || "Openverse", url: r.url
       };
     });
   }
@@ -169,8 +198,76 @@
     return out;
   }
 
+  // ---------- one search for everything ----------
+  async function searchAll(q) {
+    var jobs = [
+      ["Internet Archive", searchIA(q)],
+      ["Openverse", searchOV(q)],
+      ["Jamendo", jamKey() ? searchJam(q) : Promise.resolve([])],
+      ["Live radio", searchRadio(q).then(function (r) { return r.slice(0, 6); })]
+    ];
+    var res = await Promise.allSettled(jobs.map(function (j) { return j[1]; }));
+    var lists = [], failed = [];
+    res.forEach(function (r, i) {
+      if (r.status === "fulfilled") lists.push(r.value || []);
+      else { failed.push(jobs[i][0]); lists.push([]); }
+    });
+    // take one from each source in turn, so every source shows up near the top
+    var out = [], idx = 0, more = true;
+    while (more && out.length < 70) {
+      more = false;
+      for (var k = 0; k < lists.length; k++) {
+        if (idx < lists[k].length) { out.push(lists[k][idx]); more = true; }
+      }
+      idx++;
+    }
+    return { items: out, failed: failed, allFailed: failed.length === jobs.length };
+  }
+
+  // ---------- a pasted link ----------
+  var BLOCKED_HOSTS = /(^|\.)(youtube\.com|youtu\.be|soundcloud\.com|spotify\.com|jiosaavn\.com|saavn\.com|gaana\.com|wynk\.in|apple\.com|hungama\.com|amazon\.com|deezer\.com|tidal\.com)$/;
+
+  function resolveLink(raw) {
+    var s = String(raw || "").trim();
+    if (!s) return { err: "Paste a link first." };
+    if (!/^https?:\/\//i.test(s)) {
+      if (/^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(s)) s = "https://" + s;
+      else return { err: "That doesn't look like a link." };
+    }
+    var u;
+    try { u = new URL(s); } catch (e) { return { err: "That doesn't look like a link." }; }
+    var host = u.hostname.replace(/^www\./, "").toLowerCase();
+    if (BLOCKED_HOSTS.test(host)) {
+      return { err: "This site doesn't allow its songs to play inside other players. Open it in its own app or website." };
+    }
+    if (host === "archive.org") {
+      var m = u.pathname.match(/^\/(?:details|download)\/([^\/?#]+)/);
+      if (m) {
+        var id = decodeURIComponent(m[1]);
+        return { album: { kind: "album", src: "ia", key: id, title: id, artist: "Internet Archive" } };
+      }
+    }
+    var upgraded = false;
+    if (u.protocol === "http:") { u.protocol = "https:"; upgraded = true; }
+    var last = u.pathname.split("/").pop() || "";
+    var name = last;
+    try { name = decodeURIComponent(last.replace(/\+/g, " ")); } catch (e) {}
+    var title = name.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/_+/g, " ").trim() || host;
+    var isFile = /\.(mp3|m4a|aac|ogg|opus|wav|flac|webm)$/i.test(u.pathname);
+    return {
+      track: {
+        kind: "track", online: true, src: "link", live: !isFile,
+        id: "web:link:" + u.href, title: title, artist: host, url: u.href
+      },
+      upgraded: upgraded
+    };
+  }
+
   if (TEST) {
-    globalThis.__jm = { searchIA: searchIA, openIA: openIA, searchJam: searchJam, searchRadio: searchRadio };
+    globalThis.__jm = {
+      searchIA: searchIA, openIA: openIA, searchJam: searchJam, searchRadio: searchRadio,
+      searchOV: searchOV, searchAll: searchAll, resolveLink: resolveLink
+    };
     return;
   }
 
@@ -185,8 +282,12 @@
     return;
   }
 
-  var webSrc = "ia", webItems = [], webBack = null, webBackTitle = "",
-      webQueue = [], webBusy = 0, webTitle = "";
+  function dlog(m) { try { if (typeof dbg === "function") dbg("online: " + m); } catch (e) {} }
+  function fail(part, e) { dlog(part + " FAILED: " + (e && e.message || e)); try { console.error("jus-online: " + part, e); } catch (x) {} }
+
+  var scope = "lib";          // "lib" = My library, "net" = Online
+  var netSrc = "all";         // all | ia | ov | jam | radio | saved | link | sites
+  var netItems = [], netBack = null, netQueue = [], netBusy = 0, netT = null;
 
   // ----- saved online songs (kept on this device, per account) -----
   function savedKey() { return "jmWebSaved_" + (me ? me.name : "guest"); }
@@ -203,9 +304,7 @@
     }
     try { localStorage.setItem(savedKey(), JSON.stringify(a.slice(0, 500))); } catch (e) {}
     favSync();
-    if (document.getElementById("webDlg").open) {
-      if (webSrc === "saved") loadSaved(); else renderWeb();
-    }
+    if (scope === "net") { if (netSrc === "saved") loadSaved(); else renderNet(); }
   }
 
   // ----- playing an online track through the existing <audio> -----
@@ -240,18 +339,18 @@
     try {
       await au.play();
       if (my !== loadId || !want) return;
-      $("status").textContent = s.live ? "Playing · live radio" : "Playing · online";
+      $("status").textContent = s.live ? "Playing · live" : "Playing · online";
     } catch (e) {
       if (my !== loadId) return;
       if (e && e.name === "AbortError") return;
       $("status").textContent = (e && e.name === "NotAllowedError")
         ? "Tap ▶ to continue" : "Can't play this online track";
     }
-    if (document.getElementById("webDlg").open) renderWeb();
+    if (scope === "net") renderNet();
   }
 
   function webStep(dir) {
-    var q = webQueue.length ? webQueue : [now];
+    var q = netQueue.length ? netQueue : [now];
     var i = q.findIndex(function (x) { return x.id === now.id; });
     if (q.length < 2) {
       if (!now.live) { au.currentTime = 0; au.play().catch(function () {}); }
@@ -307,179 +406,280 @@
   };
 
   /* ============================================================
-   * THE "ONLINE MUSIC" WINDOW
+   * ONLINE VIEW (inside the normal page, driven by the normal search)
    * ============================================================ */
 
   var CSS = [
-    "#webDlg .card{max-height:90vh;overflow:auto}",
-    ".web-tabs{display:flex;flex-wrap:wrap;gap:6px}",
-    ".web-tabs .chip{padding:8px 12px;font-size:13px}",
-    ".web-search{display:flex;gap:8px}",
-    ".web-search .in{flex:1;min-width:0}",
-    ".web-search .pbtn{padding:0 16px}",
-    ".web-list{display:grid;gap:8px;max-height:44vh;overflow:auto}",
-    ".web-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:13px;background:linear-gradient(145deg,var(--surface-2),var(--surface));cursor:pointer}",
+    "body.net-mode #songs,body.net-mode #songsTitle,body.net-mode .library-bar,body.net-mode #playlistPanel{display:none!important}",
+    "#netView{display:none}",
+    "body.net-mode #netView{display:block}",
+    ".scope-row{display:flex;gap:8px;margin-top:10px}",
+    ".scope-row .chip{flex:1;padding:9px 12px;font-size:14px;text-align:center}",
+    ".net-sources{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}",
+    ".net-sources::-webkit-scrollbar{display:none}",
+    ".net-sources .chip{flex:0 0 auto;padding:8px 13px;font-size:13px}",
+    "#netList{display:grid;gap:9px}",
+    ".web-item{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:16px;background:linear-gradient(145deg,var(--surface-2),var(--surface));cursor:pointer;min-height:62px}",
     ".web-item.on{border-color:rgba(155,92,255,.55);background:rgba(155,92,255,.12)}",
+    "body.themed .web-item.on{border-color:rgba(var(--acc),.55);background:rgba(var(--acc),.10)}",
     ".web-info{flex:1;min-width:0}",
     ".web-info b{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
     ".web-info span{display:block;font-size:12px;color:var(--text-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}",
     ".web-btn{border:0;background:none;color:var(--text-soft);font-size:22px;cursor:pointer;padding:4px 8px}",
     ".web-go{color:var(--text-soft);font-size:22px}",
-    ".web-foot{font-size:11px;color:var(--text-soft);text-align:center;line-height:1.4}"
+    ".net-box{display:grid;gap:8px;margin-bottom:12px}",
+    ".site-card{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}",
+    ".site-card .web-info{flex:1}",
+    ".site-card a{flex-shrink:0;text-decoration:none;padding:9px 14px;font-size:13px;color:#fff}",
+    ".net-foot{font-size:11px;color:var(--text-soft);text-align:center;line-height:1.5;margin-top:14px}"
   ].join("\n");
+
+  var CHIPS = [
+    ["all", "All"], ["ia", "Archive"], ["ov", "Openverse"], ["jam", "Jamendo"],
+    ["radio", "Radio"], ["saved", "♥ Saved"], ["link", "🔗 Link"], ["sites", "🌍 Sites"]
+  ];
 
   function mount() {
     var st = document.createElement("style");
     st.textContent = CSS;
     document.head.appendChild(st);
 
-    var d = document.createElement("dialog");
-    d.id = "webDlg";
-    d.innerHTML =
-      '<div class="card">' +
-      "<h2>🌐 Online music</h2>" +
-      '<div class="web-tabs" id="webTabs">' +
-      '<button class="chip on" type="button" data-wsrc="ia">Internet Archive</button>' +
-      '<button class="chip" type="button" data-wsrc="jam">Jamendo</button>' +
-      '<button class="chip" type="button" data-wsrc="radio">Live radio</button>' +
-      '<button class="chip" type="button" data-wsrc="saved">♥ Saved</button>' +
-      "</div>" +
-      '<div class="web-search"><input id="webQ" class="in" type="search" placeholder="Search..." autocomplete="off">' +
-      '<button id="webGo" class="pbtn" type="button">Go</button></div>' +
-      '<div id="webKeyBox" class="hide">' +
-      '<div class="small-note">Jamendo needs a free key. Get a “client ID” at devportal.jamendo.com and paste it here once.</div>' +
-      '<input id="webKey" class="in" placeholder="Jamendo client ID" autocapitalize="none">' +
-      '<button id="webKeySave" class="pbtn alt" type="button" style="margin-top:8px">Save key</button></div>' +
-      '<div id="webMsg" class="small-note"></div>' +
-      '<div id="webList" class="web-list"></div>' +
-      '<div class="web-foot">Free and open music, played by link. Nothing is saved to your Drive. ' +
-      "Saved songs stay on this device.</div>" +
-      '<button id="webClose" class="pbtn alt" type="button">Close</button>' +
-      "</div>";
-    document.body.appendChild(d);
+    /* online results view, placed where the song list is */
+    try {
+      var main = document.querySelector("main");
+      var title = document.getElementById("songsTitle");
+      var nv = document.createElement("div");
+      nv.id = "netView";
+      nv.innerHTML =
+        '<div class="net-sources" id="netSources">' +
+        CHIPS.map(function (c, i) {
+          return '<button class="chip' + (i === 0 ? " on" : "") + '" type="button" data-ns="' + c[0] + '">' + c[1] + "</button>";
+        }).join("") + "</div>" +
+        '<div id="netKeyBox" class="net-box hide">' +
+        '<div class="small-note">Jamendo needs a free key. Get a “client ID” at devportal.jamendo.com and paste it here once.</div>' +
+        '<input id="netKey" class="in" placeholder="Jamendo client ID" autocapitalize="none">' +
+        '<button id="netKeySave" class="pbtn alt" type="button">Save key</button></div>' +
+        '<div id="netLinkBox" class="net-box hide">' +
+        '<input id="netLinkIn" class="in" type="url" placeholder="Paste a direct audio link (.mp3, .m4a ...) or an archive.org page" autocapitalize="none">' +
+        '<button id="netLinkGo" class="pbtn" type="button">Play link</button>' +
+        '<div class="small-note">Works with direct links to audio files and archive.org pages. Only play files you have the right to use.</div></div>' +
+        '<div id="netMsg" class="small-note"></div>' +
+        '<div id="netList"></div>' +
+        '<div class="net-foot">Free and open music, played by link. Nothing is saved to your Drive. Saved songs stay on this device.</div>';
+      main.insertBefore(nv, title);
+    } catch (e) { fail("online view", e); }
 
-    var da = document.querySelector(".desktop-action");
-    if (da) {
-      var b = document.createElement("button");
-      b.id = "webBtn"; b.type = "button"; b.className = "header-btn"; b.title = "Online music";
-      b.innerHTML = '<span class="header-icon">🌐</span>';
-      da.insertBefore(b, da.firstChild);
-      b.onclick = openWeb;
-    }
-    var mm = document.getElementById("mobileMenu");
-    if (mm) {
-      var m = document.createElement("button");
-      m.id = "mWeb"; m.type = "button"; m.innerHTML = "🌐 &nbsp; Online music";
-      mm.insertBefore(m, mm.firstChild);
-      m.onclick = function () { mm.classList.remove("open"); openWeb(); };
-    }
+    /* My library | Online switch under the search box */
+    try {
+      var sw = document.getElementById("searchWrap");
+      var row = document.createElement("div");
+      row.className = "scope-row";
+      row.id = "scopeRow";
+      row.innerHTML =
+        '<button class="chip on" type="button" data-scope="lib">My library</button>' +
+        '<button class="chip" type="button" data-scope="net">Online</button>';
+      sw.appendChild(row);
+      row.onclick = function (e) {
+        var s = e.target.dataset && e.target.dataset.scope;
+        if (s) setScope(s);
+      };
 
-    document.getElementById("webClose").onclick = function () { d.close(); };
-    document.getElementById("webGo").onclick = webSearch;
-    document.getElementById("webQ").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); webSearch(); }
-    });
-    document.getElementById("webTabs").onclick = function (e) {
-      var s = e.target.dataset && e.target.dataset.wsrc;
-      if (s) setSrc(s);
-    };
-    document.getElementById("webKeySave").onclick = function () {
-      var v = document.getElementById("webKey").value.trim();
-      if (!v) return;
-      try { localStorage.setItem("jmJamKey", v); } catch (e) {}
-      document.getElementById("webKeyBox").classList.add("hide");
-      webSearch();
-    };
-    document.getElementById("webList").onclick = onListClick;
+      var inp = $("search");
+      var _so = inp.oninput;
+      inp.oninput = function (e) {
+        if (scope === "net") { clearTimeout(netT); netT = setTimeout(netRun, 500); return; }
+        return _so && _so.call(this, e);
+      };
+      inp.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && scope === "net") { e.preventDefault(); clearTimeout(netT); netRun(); }
+      });
+
+      // closing the search box also leaves Online mode
+      var sb = $("searchBtn");
+      var _sbc = sb.onclick;
+      sb.onclick = function (e) {
+        var r = _sbc && _sbc.call(this, e);
+        if (scope === "net" && !sw.classList.contains("open")) setScope("lib");
+        return r;
+      };
+    } catch (e) { fail("search switch", e); }
+
+    /* chips + boxes */
+    try {
+      $("netSources").onclick = function (e) {
+        var s = e.target.dataset && e.target.dataset.ns;
+        if (s) setNetSrc(s);
+      };
+      $("netKeySave").onclick = function () {
+        var v = $("netKey").value.trim();
+        if (!v) return;
+        try { localStorage.setItem("jmJamKey", v); } catch (e) {}
+        $("netKeyBox").classList.add("hide");
+        netRun();
+      };
+      $("netLinkGo").onclick = playPastedLink;
+      $("netLinkIn").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); playPastedLink(); }
+      });
+      $("netList").onclick = onListClick;
+    } catch (e) { fail("online wiring", e); }
+
+    /* menu + header entry points */
+    try {
+      var da = document.querySelector(".desktop-action");
+      if (da) {
+        var b = document.createElement("button");
+        b.id = "webBtn"; b.type = "button"; b.className = "header-btn"; b.title = "Online music";
+        b.innerHTML = '<span class="header-icon">🌐</span>';
+        da.insertBefore(b, da.firstChild);
+        b.onclick = openNet;
+      }
+      var mm = document.getElementById("mobileMenu");
+      if (mm) {
+        var m = document.createElement("button");
+        m.id = "mWeb"; m.type = "button"; m.innerHTML = "🌐 &nbsp; Online music";
+        mm.insertBefore(m, mm.firstChild);
+        m.onclick = function () { mm.classList.remove("open"); openNet(); };
+      }
+    } catch (e) { fail("menu entry", e); }
   }
 
-  function openWeb() {
-    var d = document.getElementById("webDlg");
-    d.showModal();
-    if (!webItems.length) setSrc(webSrc);
+  function openNet() {
+    $("searchWrap").classList.add("open");
+    setScope("net");
+    try { $("search").focus(); } catch (e) {}
   }
 
-  function setSrc(s) {
-    webSrc = s; webBack = null; webItems = [];
-    var chips = document.querySelectorAll("#webTabs .chip");
-    for (var i = 0; i < chips.length; i++) {
-      chips[i].classList.toggle("on", chips[i].dataset.wsrc === s);
+  function setScope(s) {
+    scope = s;
+    var chips = document.querySelectorAll("#scopeRow .chip");
+    for (var i = 0; i < chips.length; i++) chips[i].classList.toggle("on", chips[i].dataset.scope === s);
+    document.body.classList.toggle("net-mode", s === "net");
+    $("search").placeholder = s === "net" ? "Search online (all free sources)..." : "Search songs...";
+    if (s === "net") {
+      q = "";                         // the library list is not filtered while searching online
+      shown = PAGE;
+      try { refresh(); } catch (e) {}
+      if (!netItems.length && netSrc !== "sites" && netSrc !== "link") setNetSrc(netSrc); else renderNet();
+    } else {
+      q = $("search").value;          // back to the library, using what is typed
+      shown = PAGE;
+      try { refresh(); } catch (e) {}
     }
-    var q = document.getElementById("webQ");
-    q.placeholder = s === "radio" ? "Search station, language or genre..."
-      : s === "saved" ? "Saved songs" : "Search songs or artists...";
-    q.disabled = s === "saved";
-    document.getElementById("webGo").disabled = s === "saved";
-    document.getElementById("webKeyBox").classList.toggle("hide", !(s === "jam" && !jamKey()));
-    if (s === "saved") loadSaved(); else webSearch();
+  }
+
+  function setNetSrc(s) {
+    netSrc = s; netBack = null; netItems = [];
+    var chips = document.querySelectorAll("#netSources .chip");
+    for (var i = 0; i < chips.length; i++) chips[i].classList.toggle("on", chips[i].dataset.ns === s);
+    $("netKeyBox").classList.toggle("hide", !(s === "jam" && !jamKey()));
+    $("netLinkBox").classList.toggle("hide", s !== "link");
+    $("netMsg").textContent = "";
+    if (s === "saved") loadSaved();
+    else if (s === "sites") renderSites();
+    else if (s === "link") renderNet();
+    else netRun();
   }
 
   function loadSaved() {
-    webBack = null;
-    webItems = getSaved().map(function (x) {
+    netBack = null;
+    netItems = getSaved().map(function (x) {
       return { kind: "track", online: true, src: x.src, live: !!x.live, id: x.id, title: x.title, artist: x.artist, url: x.url };
     });
-    document.getElementById("webMsg").textContent =
-      webItems.length ? "" : "Nothing saved yet. Tap ♡ on any online song.";
-    renderWeb();
+    $("netMsg").textContent = netItems.length ? "" : "Nothing saved yet. Tap ♡ on any online song.";
+    renderNet();
   }
 
-  async function webSearch() {
-    if (webSrc === "saved") { loadSaved(); return; }
-    var msg = document.getElementById("webMsg");
-    var q = document.getElementById("webQ").value.trim();
-    var my = ++webBusy;
-    webBack = null; webItems = [];
-    if (webSrc === "jam" && !jamKey()) {
-      document.getElementById("webKeyBox").classList.remove("hide");
+  function renderSites() {
+    netItems = [];
+    $("netMsg").textContent = "Open a site, find a song, copy its direct audio link, then paste it under 🔗 Link.";
+    $("netList").innerHTML = SITES.map(function (s) {
+      return '<div class="site-card"><div class="web-info"><b>' + esc2(s.n) + "</b><span>" + esc2(s.d) +
+        '</span></div><a class="pbtn" href="' + esc2(s.u) + '" target="_blank" rel="noopener noreferrer">Open</a></div>';
+    }).join("");
+  }
+
+  async function netRun() {
+    if (netSrc === "saved") { loadSaved(); return; }
+    if (netSrc === "sites") { renderSites(); return; }
+    if (netSrc === "link") { renderNet(); return; }
+    var msg = $("netMsg");
+    var query = $("search").value.trim();
+    var my = ++netBusy;
+    netBack = null; netItems = [];
+    if (netSrc === "jam" && !jamKey()) {
+      $("netKeyBox").classList.remove("hide");
       msg.textContent = "Add your free Jamendo key to search it.";
-      renderWeb(); return;
+      renderNet(); return;
     }
     msg.textContent = "Searching...";
-    renderWeb();
+    renderNet();
     try {
-      var r = webSrc === "ia" ? await searchIA(q)
-        : webSrc === "jam" ? await searchJam(q) : await searchRadio(q);
-      if (my !== webBusy) return;
-      webItems = r;
-      msg.textContent = r.length ? "" : "No results. Try another word.";
+      var items;
+      if (netSrc === "all") {
+        var r = await searchAll(query);
+        if (my !== netBusy) return;
+        if (r.allFailed) throw new Error("no source answered. Check your internet and try again.");
+        items = r.items;
+        msg.textContent = items.length
+          ? (r.failed.length ? "Some sources didn't answer: " + r.failed.join(", ") : "")
+          : "No results. Try another word.";
+      } else {
+        items = netSrc === "ia" ? await searchIA(query)
+          : netSrc === "ov" ? await searchOV(query)
+          : netSrc === "jam" ? await searchJam(query) : await searchRadio(query);
+        if (my !== netBusy) return;
+        msg.textContent = items.length ? "" : (netSrc === "ov" && !query ? "Type a word to search Openverse." : "No results. Try another word.");
+      }
+      netItems = items;
     } catch (err) {
-      if (my !== webBusy) return;
+      if (my !== netBusy) return;
       msg.textContent = "Could not load: " + (err && err.name === "AbortError" ? "timed out" : (err && err.message || err));
     }
-    renderWeb();
+    renderNet();
   }
 
   async function openAlbum(a) {
-    var msg = document.getElementById("webMsg");
+    var msg = $("netMsg");
     msg.textContent = "Opening...";
     try {
       var tracks = await openIA(a);
       if (!tracks.length) { msg.textContent = "No playable audio files in this item."; return; }
-      webBack = webItems; webBackTitle = webTitle;
-      webItems = tracks; webTitle = a.title;
+      netBack = netItems;
+      netItems = tracks;
       msg.textContent = "";
-      renderWeb();
+      renderNet();
     } catch (err) {
       msg.textContent = "Could not open: " + (err && err.message || err);
     }
   }
 
-  function renderWeb() {
-    var L = document.getElementById("webList");
-    if (!webItems.length) { L.innerHTML = ""; return; }
+  function playPastedLink() {
+    var r = resolveLink($("netLinkIn").value);
+    var msg = $("netMsg");
+    if (r.err) { msg.textContent = r.err; return; }
+    if (r.album) { msg.textContent = ""; openAlbum(r.album); return; }
+    msg.textContent = r.upgraded ? "Using a secure (https) version of the link." : "";
+    netQueue = [r.track];
+    play(r.track);
+  }
+
+  function renderNet() {
+    var L = $("netList");
+    if (!netItems.length) { if (netSrc !== "sites") L.innerHTML = ""; return; }
     var html = "";
-    if (webBack) {
-      html += '<button class="pbtn alt" id="webBackBtn" type="button">← Back to results</button>';
+    if (netBack) {
+      html += '<button class="pbtn alt" id="netBackBtn" type="button">← Back to results</button>';
     }
-    html += webItems.map(function (t, i) {
+    html += netItems.map(function (t, i) {
+      var sn = SRC_NAME[t.src] || "";
       if (t.kind === "album") {
         return '<div class="web-item" data-open="' + i + '"><div class="web-info"><b>' + esc2(t.title) +
-          "</b><span>" + esc2(t.artist) + ' · tap to open</span></div><span class="web-go">›</span></div>';
+          "</b><span>" + esc2(t.artist) + " · " + esc2(sn) + ' · tap to open</span></div><span class="web-go">›</span></div>';
       }
       var on = now && now.id === t.id;
       return '<div class="web-item' + (on ? " on" : "") + '"><div class="web-info" data-play="' + i + '"><b>' +
-        esc2(t.title) + "</b><span>" + esc2(t.artist) + (t.live ? " · LIVE" : "") +
+        esc2(t.title) + "</b><span>" + esc2(t.artist) + " · " + esc2(sn) + (t.live ? " · LIVE" : "") +
         '</span></div><button class="web-btn" type="button" data-save="' + i + '">' +
         (isSaved(t.id) ? "♥" : "♡") + "</button></div>";
     }).join("");
@@ -487,20 +687,20 @@
   }
 
   function onListClick(e) {
-    var b = e.target.closest("[data-open],[data-play],[data-save],#webBackBtn");
+    var b = e.target.closest("[data-open],[data-play],[data-save],#netBackBtn");
     if (!b) return;
-    if (b.id === "webBackBtn") {
-      webItems = webBack; webBack = null; webTitle = webBackTitle; renderWeb(); return;
-    }
-    if (b.dataset.open !== undefined) { openAlbum(webItems[+b.dataset.open]); return; }
-    if (b.dataset.save !== undefined) { toggleSave(webItems[+b.dataset.save]); return; }
-    var t = webItems[+b.dataset.play];
+    if (b.id === "netBackBtn") { netItems = netBack; netBack = null; renderNet(); return; }
+    if (b.dataset.open !== undefined) { openAlbum(netItems[+b.dataset.open]); return; }
+    if (b.dataset.save !== undefined) { toggleSave(netItems[+b.dataset.save]); return; }
+    var t = netItems[+b.dataset.play];
     if (!t) return;
-    webQueue = webItems.filter(function (x) { return x.kind === "track"; });
+    netQueue = netItems.filter(function (x) { return x.kind === "track"; });
     play(t);
-    renderWeb();
+    renderNet();
   }
 
   mount();
-  console.log("Jus Music online add-on ready");
+  window.__jmOnline = "2";
+  dlog("add-on v2 loaded");
+  console.log("Jus Music online add-on v2 ready");
 })();
