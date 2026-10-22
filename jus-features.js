@@ -1,5 +1,5 @@
 /*
- * JUS MUSIC - FEATURES ADD-ON (v2.1)   file: jus-features.js
+ * JUS MUSIC - FEATURES ADD-ON (v2.2)   file: jus-features.js
  *
  * REPLACES the earlier jus-features.js (same file name, new content).
  *
@@ -487,7 +487,7 @@
     ".mobile-menu button{display:flex;align-items:center;gap:10px;white-space:nowrap}",
     ".mobile-menu .ic{width:24px;text-align:center;flex-shrink:0;font-size:17px}",
     /* play button: round and in the theme colour */
-    ".controls .control-btn.main{border-radius:50%!important;background:linear-gradient(145deg,var(--accent),var(--accent-2))!important;border-color:transparent!important;color:var(--on-acc,#fff)!important;box-shadow:0 6px 20px rgba(0,0,0,.45)!important}",
+    ".controls .control-btn.main{border-radius:50%!important;background:var(--accent)!important;border:0!important;color:var(--on-acc,#fff)!important;box-shadow:none!important}",
     ".menu-h{padding:12px 12px 4px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-soft)}",
     ".menu-h.adm-h{color:var(--accent)}",
     /* bottom sheet */
@@ -866,7 +866,7 @@
   async function openInfo(s) {
     var rows = [["Title", s.title], ["Artist", s.artist]];
     if (s.local) rows.push(["Source", "This device"]);
-    else if (s.online) rows.push(["Source", "Online (" + (s.src === "ia" ? "Internet Archive" : s.src === "jam" ? "Jamendo" : s.src === "radio" ? "live radio" : "link") + ")"]);
+    else if (s.online) rows.push(["Source", "Online (" + (s.src === "ia" ? "Internet Archive" : s.src === "ov" ? "Openverse" : s.src === "jam" ? "Jamendo" : s.src === "radio" ? "live radio" : "link") + ")"]);
     else {
       rows.push(["Language", s.language], ["Genre", s.genre]);
       if (s.fl) rows.push(["Folder", s.fl]);
@@ -1045,7 +1045,7 @@
   if (!savedTheme) savedTheme = document.body.classList.contains("light") ? "light" : "purple";
   applyTheme(savedTheme);
   try { refresh(); } catch (e) {}
-  window.__jmFeatures = "2.1";
-  dlog("add-on v2.1 loaded");
-  console.log("Jus Music features add-on v2.1 ready");
+  window.__jmFeatures = "2.2";
+  dlog("add-on v2.2 loaded");
+  console.log("Jus Music features add-on v2.2 ready");
 })();
