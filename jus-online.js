@@ -27,7 +27,7 @@
     "https://de2.api.radio-browser.info"
   ];
 
-  var SRC_NAME = { ia: "Internet Archive", ov: "Openverse", jam: "Jamendo", radio: "Live radio", link: "Link" };
+  var SRC_NAME = { ia: "Internet Archive", ov: "Openverse", jam: "Jamendo", radio: "Live radio", link: "Link", pv: "Apple preview (30 s)" };
 
   var SITES = [
     { n: "Internet Archive · Audio", d: "Huge free library: music, old records, live recordings.", u: "https://archive.org/details/audio" },
@@ -76,11 +76,22 @@
     return normQuery(q).toLowerCase().split(/[\s.]+/).filter(function (t) { return t.length >= 2; });
   }
 
-  function relevance(item, words) {
-    var hay = normQuery(String(item.title || "") + " " + String(item.artist || ""))
-      .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ");
-    var n = 0;
+  function hayOf(item) {
+    return normQuery(String(item.title || "") + " " + String(item.artist || ""))
+      .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function wordHits(item, words) {
+    var hay = hayOf(item), n = 0;
     words.forEach(function (w) { if (hay.indexOf(w) >= 0) n++; });
+    return n;
+  }
+
+  // words found, plus a bonus when the whole phrase appears exactly
+  function relevance(item, words) {
+    var n = wordHits(item, words);
+    var phrase = words.join(" ");
+    if (words.length > 1 && hayOf(item).indexOf(phrase) >= 0) n += words.length;
     return n;
   }
 
@@ -91,6 +102,18 @@
     return items.map(function (it, i) { return { it: it, i: i, s: relevance(it, words) }; })
       .sort(function (a, b) { return b.s - a.s || a.i - b.i; })
       .map(function (x) { return x.it; });
+  }
+
+  // "strong" = most of the typed words are in the title/artist; the rest is "weak"
+  function splitByRelevance(items, q) {
+    var words = queryTerms(q);
+    if (!words.length) return { strong: items, weak: [] };
+    var need = Math.max(1, Math.ceil(words.length * 0.7));
+    var strong = [], weak = [];
+    rankItems(items, q).forEach(function (it) {
+      (wordHits(it, words) >= need ? strong : weak).push(it);
+    });
+    return { strong: strong, weak: weak };
   }
 
   // ---------- Internet Archive ----------
@@ -264,6 +287,55 @@
     return { items: out, failed: failed, allFailed: failed.length === jobs.length };
   }
 
+  // ---------- reference lookup: correct spelling, artist, album, 30-second preview ----------
+  var metaCache = {};
+
+  function jsonp(url, ms) {
+    return new Promise(function (res, rej) {
+      if (typeof document === "undefined") { rej(new Error("no page")); return; }
+      var name = "__jmcb" + Date.now() + Math.floor(Math.random() * 1e6);
+      var sc = document.createElement("script"), done = false;
+      function clean() {
+        try { delete window[name]; } catch (e) { window[name] = undefined; }
+        if (sc.parentNode) sc.parentNode.removeChild(sc);
+      }
+      var t = setTimeout(function () { if (done) return; done = true; clean(); rej(new Error("timed out")); }, ms || 8000);
+      window[name] = function (d) { if (done) return; done = true; clearTimeout(t); clean(); res(d); };
+      sc.onerror = function () { if (done) return; done = true; clearTimeout(t); clean(); rej(new Error("blocked")); };
+      sc.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "callback=" + name;
+      document.head.appendChild(sc);
+    });
+  }
+
+  async function lookupMeta(q) {
+    q = normQuery(q);
+    if (!q) return [];
+    if (metaCache[q]) return metaCache[q];
+    var url = "https://itunes.apple.com/search?media=music&entity=song&limit=5&country=IN&term=" + encodeURIComponent(q);
+    var j;
+    try { j = await wj(url, 8000); }
+    catch (e) { j = await jsonp(url, 8000); }     // the browser may block a direct call: use the script method
+    var out = (j.results || []).filter(function (r) { return r.trackName; }).map(function (r) {
+      return {
+        title: r.trackName, artist: r.artistName || "", album: r.collectionName || "",
+        year: String(r.releaseDate || "").slice(0, 4), preview: r.previewUrl || "",
+        art: r.artworkUrl100 || "", link: r.trackViewUrl || ""
+      };
+    });
+    metaCache[q] = out;
+    return out;
+  }
+
+  function listenLinks(text) {
+    var e = encodeURIComponent(String(text || "").trim());
+    return [
+      { n: "YouTube Music", u: "https://music.youtube.com/search?q=" + e },
+      { n: "Spotify", u: "https://open.spotify.com/search/" + e },
+      { n: "YouTube", u: "https://www.youtube.com/results?search_query=" + e },
+      { n: "Google", u: "https://www.google.com/search?q=" + encodeURIComponent(String(text || "").trim() + " song") }
+    ];
+  }
+
   // ---------- a pasted link ----------
   var BLOCKED_HOSTS = /(^|\.)(youtube\.com|youtu\.be|soundcloud\.com|spotify\.com|jiosaavn\.com|saavn\.com|gaana\.com|wynk\.in|apple\.com|hungama\.com|amazon\.com|deezer\.com|tidal\.com)$/;
 
@@ -307,7 +379,8 @@
     globalThis.__jm = {
       searchIA: searchIA, openIA: openIA, searchJam: searchJam, searchRadio: searchRadio,
       searchOV: searchOV, searchAll: searchAll, resolveLink: resolveLink,
-      normQuery: normQuery, queryTerms: queryTerms, rankItems: rankItems
+      normQuery: normQuery, queryTerms: queryTerms, rankItems: rankItems,
+      splitByRelevance: splitByRelevance, lookupMeta: lookupMeta, listenLinks: listenLinks
     };
     return;
   }
@@ -329,6 +402,7 @@
   var scope = "lib";          // "lib" = My library, "net" = Online
   var netSrc = "all";         // all | ia | ov | jam | radio | saved | link | sites
   var netItems = [], netBack = null, netQueue = [], netBusy = 0, netT = null;
+  var netWeak = [], netMeta = [], netShowWeak = false, netQ = "";
 
   // ----- saved online songs (kept on this device, per account) -----
   function savedKey() { return "jmWebSaved_" + (me ? me.name : "guest"); }
@@ -475,6 +549,13 @@
     ".site-card{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}",
     ".site-card .web-info{flex:1}",
     ".site-card a{flex-shrink:0;text-decoration:none;padding:9px 14px;font-size:13px;color:#fff}",
+    ".hint-btn{display:block;width:100%;text-align:left;border:1px dashed var(--border);background:var(--surface-2);color:var(--text);border-radius:12px;padding:11px 12px;cursor:pointer;font-size:14px}",
+    ".net-h{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);margin:6px 2px 0}",
+    ".web-item.meta .art{width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0}",
+    ".web-item.meta{cursor:default}",
+    ".web-btn{text-decoration:none}",
+    ".listen-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--text-soft)}",
+    ".listen-row a.chip{text-decoration:none;padding:6px 11px;font-size:12px}",
     ".net-foot{font-size:11px;color:var(--text-soft);text-align:center;line-height:1.5;margin-top:14px}"
   ].join("\n");
 
@@ -650,7 +731,7 @@
     var msg = $("netMsg");
     var query = $("search").value.trim();
     var my = ++netBusy;
-    netBack = null; netItems = [];
+    netBack = null; netItems = []; netWeak = []; netMeta = []; netShowWeak = false; netQ = query;
     if (netSrc === "jam" && !jamKey()) {
       $("netKeyBox").classList.remove("hide");
       msg.textContent = "Add your free Jamendo key to search it.";
@@ -658,27 +739,32 @@
     }
     msg.textContent = "Searching...";
     renderNet();
+    var metaP = query ? lookupMeta(query).catch(function () { return []; }) : Promise.resolve([]);
     try {
-      var items;
+      var items, failed = [];
       if (netSrc === "all") {
         var r = await searchAll(query);
-        if (my !== netBusy) return;
         if (r.allFailed) throw new Error("no source answered. Check your internet and try again.");
-        items = r.items;
-        msg.textContent = items.length
-          ? (r.failed.length ? "Some sources didn't answer: " + r.failed.join(", ") : "")
-          : "No results. Try another word.";
+        items = r.items; failed = r.failed;
       } else {
         items = netSrc === "ia" ? await searchIA(query)
           : netSrc === "ov" ? await searchOV(query)
           : netSrc === "jam" ? await searchJam(query) : await searchRadio(query);
-        if (my !== netBusy) return;
-        items = rankItems(items, query);
-        msg.textContent = items.length ? "" : (netSrc === "ov" && !query ? "Type a word to search Openverse." : "No results. Try another word.");
       }
-      netItems = items;
-    } catch (err) {
+      var meta = await metaP;
       if (my !== netBusy) return;
+      var sp = splitByRelevance(items, query);
+      netItems = sp.strong; netWeak = sp.weak; netMeta = meta;
+      var note = failed.length ? "Some sources didn't answer: " + failed.join(", ") + "." : "";
+      if (!netItems.length) {
+        msg.textContent = (query
+          ? "No exact match for “" + query + "” in the free sources." + (netWeak.length ? " Loosely related results are hidden." : "")
+          : "No results.") + (note ? " " + note : "");
+      } else msg.textContent = note;
+    } catch (err) {
+      var m2 = await metaP;
+      if (my !== netBusy) return;
+      netMeta = m2;
       msg.textContent = "Could not load: " + (err && err.name === "AbortError" ? "timed out" : (err && err.message || err));
     }
     renderNet();
@@ -692,6 +778,7 @@
       if (!tracks.length) { msg.textContent = "No playable audio files in this item."; return; }
       netBack = netItems;
       netItems = tracks;
+      netShowWeak = false;
       msg.textContent = "";
       renderNet();
     } catch (err) {
@@ -709,43 +796,120 @@
     play(r.track);
   }
 
+  function libCount(query) {
+    try {
+      var words = queryTerms(query);
+      if (!words.length || typeof songs === "undefined") return 0;
+      return songs.filter(function (x) {
+        var hay = normQuery(String(x.title || "") + " " + String(x.artist || "")).toLowerCase();
+        return words.every(function (w) { return hay.indexOf(w) >= 0; });
+      }).length;
+    } catch (e) { return 0; }
+  }
+
+  function shownItems() { return (netShowWeak && !netBack) ? netItems.concat(netWeak) : netItems; }
+
+  function rowHtml(t, i) {
+    var sn = SRC_NAME[t.src] || "";
+    if (t.kind === "album") {
+      return '<div class="web-item" data-open="' + i + '"><div class="web-info"><b>' + esc2(t.title) +
+        "</b><span>" + esc2(t.artist) + " · " + esc2(sn) + ' · tap to open</span></div><span class="web-go">›</span></div>';
+    }
+    var on = now && now.id === t.id;
+    return '<div class="web-item' + (on ? " on" : "") + '"><div class="web-info" data-play="' + i + '"><b>' +
+      esc2(t.title) + "</b><span>" + esc2(t.artist) + " · " + esc2(sn) + (t.live ? " · LIVE" : "") +
+      '</span></div><button class="web-btn" type="button" data-save="' + i + '">' +
+      (isSaved(t.id) ? "♥" : "♡") + "</button></div>";
+  }
+
+  function metaCard(x, i) {
+    var sub = [x.artist, x.album, x.year].filter(Boolean).join(" · ");
+    return '<div class="web-item meta">' +
+      (x.art ? '<img class="art" src="' + esc2(x.art) + '" alt="" width="44" height="44" loading="lazy">' : "") +
+      '<div class="web-info"><b>' + esc2(x.title) + "</b><span>" + esc2(sub) + "</span></div>" +
+      (x.preview ? '<button class="web-btn" type="button" data-pv="' + i + '" title="30-second preview">▶</button>' : "") +
+      (x.link ? '<a class="web-btn" href="' + esc2(x.link) + '" target="_blank" rel="noopener noreferrer" title="Open in Apple Music">↗</a>' : "") +
+      "</div>";
+  }
+
+  // hints, the reference match and "listen in full" links, shown above the results
+  function topSection() {
+    if (netSrc === "saved" || netSrc === "sites" || netSrc === "link" || !netQ) return "";
+    var h = "";
+    var lib = libCount(netQ);
+    if (lib) {
+      h += '<button class="hint-btn" type="button" data-lib="1">📚 ' + lib + " matching song" + (lib === 1 ? "" : "s") +
+        " in My library — show</button>";
+    }
+    var m = netMeta[0];
+    if (m) {
+      var words = queryTerms(netQ), hay = normQuery(m.title + " " + m.artist).toLowerCase();
+      var covers = words.every(function (w) { return hay.indexOf(w) >= 0; });
+      if (!covers) {
+        h += '<button class="hint-btn" type="button" data-dym="0">Did you mean “' + esc2(m.title) + "”? Search again</button>";
+      }
+      h += '<div class="net-h">Reference match · 30-second previews</div>';
+      netMeta.slice(0, 2).forEach(function (x, i) { h += metaCard(x, i); });
+    }
+    var lk = listenLinks(m ? m.title + " " + m.artist : netQ);
+    h += '<div class="listen-row"><span>Listen in full on:</span>' + lk.map(function (a) {
+      return '<a class="chip" href="' + esc2(a.u) + '" target="_blank" rel="noopener noreferrer">' + esc2(a.n) + "</a>";
+    }).join("") + "</div>";
+    return h;
+  }
+
   function renderNet() {
     var L = $("netList");
-    if (!netItems.length) { if (netSrc !== "sites") L.innerHTML = ""; return; }
-    var html = "";
+    var top = netBack ? "" : topSection();
+    if (!netItems.length && !top && !netWeak.length) { if (netSrc !== "sites") L.innerHTML = ""; return; }
+    var html = top;
     if (netBack) {
       html += '<button class="pbtn alt" id="netBackBtn" type="button">← Back to results</button>';
     }
-    html += netItems.map(function (t, i) {
-      var sn = SRC_NAME[t.src] || "";
-      if (t.kind === "album") {
-        return '<div class="web-item" data-open="' + i + '"><div class="web-info"><b>' + esc2(t.title) +
-          "</b><span>" + esc2(t.artist) + " · " + esc2(sn) + ' · tap to open</span></div><span class="web-go">›</span></div>';
+    html += netItems.map(function (t, i) { return rowHtml(t, i); }).join("");
+    if (!netBack && netWeak.length) {
+      if (netShowWeak) {
+        html += '<div class="net-h">Loosely related</div>' +
+          netWeak.map(function (t, i) { return rowHtml(t, netItems.length + i); }).join("");
+      } else {
+        html += '<button class="pbtn alt" type="button" data-weak="1">Show ' + netWeak.length + " loosely related results</button>";
       }
-      var on = now && now.id === t.id;
-      return '<div class="web-item' + (on ? " on" : "") + '"><div class="web-info" data-play="' + i + '"><b>' +
-        esc2(t.title) + "</b><span>" + esc2(t.artist) + " · " + esc2(sn) + (t.live ? " · LIVE" : "") +
-        '</span></div><button class="web-btn" type="button" data-save="' + i + '">' +
-        (isSaved(t.id) ? "♥" : "♡") + "</button></div>";
-    }).join("");
+    }
     L.innerHTML = html;
   }
 
   function onListClick(e) {
-    var b = e.target.closest("[data-open],[data-play],[data-save],#netBackBtn");
+    var b = e.target.closest("[data-open],[data-play],[data-save],[data-lib],[data-dym],[data-pv],[data-weak],#netBackBtn");
     if (!b) return;
+    var list = shownItems();
     if (b.id === "netBackBtn") { netItems = netBack; netBack = null; renderNet(); return; }
-    if (b.dataset.open !== undefined) { openAlbum(netItems[+b.dataset.open]); return; }
-    if (b.dataset.save !== undefined) { toggleSave(netItems[+b.dataset.save]); return; }
-    var t = netItems[+b.dataset.play];
+    if (b.dataset.weak !== undefined) { netShowWeak = true; renderNet(); return; }
+    if (b.dataset.lib !== undefined) { setScope("lib"); return; }
+    if (b.dataset.dym !== undefined) {
+      var mm = netMeta[+b.dataset.dym];
+      if (mm) { $("search").value = mm.title; clearTimeout(netT); netRun(); }
+      return;
+    }
+    if (b.dataset.pv !== undefined) {
+      var x = netMeta[+b.dataset.pv];
+      if (!x || !x.preview) return;
+      var pt = { kind: "track", online: true, src: "pv", live: false, id: "web:pv:" + x.title + "|" + x.artist,
+        title: x.title + " (30 s preview)", artist: x.artist, url: x.preview };
+      netQueue = [pt];
+      play(pt);
+      return;
+    }
+    if (b.dataset.open !== undefined) { openAlbum(list[+b.dataset.open]); return; }
+    if (b.dataset.save !== undefined) { toggleSave(list[+b.dataset.save]); return; }
+    var t = list[+b.dataset.play];
     if (!t) return;
-    netQueue = netItems.filter(function (x) { return x.kind === "track"; });
+    netQueue = list.filter(function (x) { return x.kind === "track"; });
     play(t);
     renderNet();
   }
 
   mount();
-  window.__jmOnline = "2.1";
-  dlog("add-on v2.1 loaded");
-  console.log("Jus Music online add-on v2.1 ready");
+  window.__jmOnline = "2.2";
+  dlog("add-on v2.2 loaded");
+  console.log("Jus Music online add-on v2.2 ready");
 })();
