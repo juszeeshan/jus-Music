@@ -1,5 +1,5 @@
 /*
- * JUS MUSIC - FEATURES ADD-ON (v2.3)   file: jus-features.js
+ * JUS MUSIC - FEATURES ADD-ON (v2.6)   file: jus-features.js
  *
  * REPLACES the earlier jus-features.js (same file name, new content).
  *
@@ -59,17 +59,24 @@
     return "mp3";
   }
 
-  function sortOrder(songs, mode, plays) {
+  // extra = { last: {songId: timeLastPlayed}, favs: [songIds] }
+  function sortOrder(songs, mode, plays, extra) {
     var a = songs.slice();
     var L = function (x, y) {
       return String(x).localeCompare(String(y), undefined, { sensitivity: "base", numeric: true });
     };
     plays = plays || {};
+    extra = extra || {};
+    var last = extra.last || {}, favs = extra.favs || [];
     if (mode === "added-desc") a.sort(function (x, y) { return y.added - x.added; });
     else if (mode === "title-asc") a.sort(function (x, y) { return L(x.title, y.title) || x.added - y.added; });
     else if (mode === "title-desc") a.sort(function (x, y) { return L(y.title, x.title) || x.added - y.added; });
     else if (mode === "artist-asc") a.sort(function (x, y) { return L(x.artist, y.artist) || L(x.title, y.title); });
-    else if (mode === "plays-desc") a.sort(function (x, y) { return (plays[y.id] || 0) - (plays[x.id] || 0) || x.added - y.added; });
+    else if (mode === "plays-desc") a.sort(function (x, y) { return (plays[y.id] || 0) - (plays[x.id] || 0) || (last[y.id] || 0) - (last[x.id] || 0) || x.added - y.added; });
+    else if (mode === "recent-desc") a.sort(function (x, y) { return (last[y.id] || 0) - (last[x.id] || 0) || x.added - y.added; });
+    else if (mode === "fav-first") a.sort(function (x, y) {
+      return (favs.indexOf(y.id) >= 0 ? 1 : 0) - (favs.indexOf(x.id) >= 0 ? 1 : 0) || x.added - y.added;
+    });
     else a.sort(function (x, y) { return x.added - y.added; });
     return a;
   }
@@ -191,6 +198,49 @@
     dlog(part + " FAILED: " + (e && e.message || e));
     try { console.error("jus-features: " + part, e); } catch (x) {}
   }
+  /* ---- notification shade / lock screen ---- */
+  function artwork() {
+    try {
+      return [
+        { src: new URL("icon-192.png", location.href).href, sizes: "192x192", type: "image/png" },
+        { src: new URL("icon-512.png", location.href).href, sizes: "512x512", type: "image/png" }
+      ];
+    } catch (e) { return []; }
+  }
+  function msSet(s) {
+    if (!s || !("mediaSession" in navigator)) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: s.title || "Jus Music", artist: s.artist || "", album: "Jus Music", artwork: artwork()
+      });
+    } catch (e) {}
+  }
+  function msState() {
+    try { if ("mediaSession" in navigator) navigator.mediaSession.playbackState = au.paused ? "paused" : "playing"; } catch (e) {}
+  }
+  function mediaCheck() {
+    var L = [];
+    var has = ("mediaSession" in navigator);
+    L.push("Media controls supported by this browser: " + (has ? "yes" : "NO"));
+    if (has) {
+      var md = navigator.mediaSession.metadata;
+      L.push("Title given to the notification: " + (md ? md.title : "NOTHING SET (play a song first)"));
+      L.push("Notification state: " + navigator.mediaSession.playbackState);
+    }
+    L.push("Audio: " + (au.paused ? "paused" : "playing") +
+      " | source: " + (au.src ? (au.src.indexOf("blob:") === 0 ? "own library stream" : "web link") : "none") +
+      " | length: " + (isFinite(au.duration) && au.duration > 0 ? Math.round(au.duration) + " s" : "unknown or live"));
+    var sa = false;
+    try { sa = !!(window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true; } catch (e) {}
+    L.push("Opened as: " + (sa ? "installed app (standalone)" : "Chrome tab or home-screen shortcut"));
+    L.push("Site notification permission: " + (typeof Notification !== "undefined" ? Notification.permission : "n/a"));
+    L.push("Screen-off mode: " + (typeof msEnabled !== "undefined" ? (msEnabled ? "ON" : "OFF") : "?") +
+      " | stream engine running: " + (typeof msMode !== "undefined" ? (msMode ? "yes" : "no") : "?"));
+    L.push("Page visible: " + (document.hidden ? "no" : "yes"));
+    L.push("Browser: " + navigator.userAgent);
+    L.push("", "How to use: start a song, then open this check again. If 'Notification state' says playing but the shade shows nothing, the phone is hiding it (see the checklist).");
+    return L.join("\n");
+  }
   function cleanArtists() {
     (songs || []).forEach(function (s) {
       if (s && s.artist && s.artist !== "Unknown" && looksLikeSite(s.artist)) s.artist = "Unknown";
@@ -202,6 +252,8 @@
   }
 
   /* ---------------- history + play counts ---------------- */
+  var seekRestarting = false, seekGen = 0;
+
   function record(s) {
     if (!s || !s.id || s.online || s.local || !me) return;
     var h = jget("jmHist_" + uname(), []);
@@ -274,7 +326,7 @@
     if (s && s.local) return playLocal(s);
     if (s && !s.online) {
       try { $("progress").disabled = false; } catch (e) {}
-      record(s);
+      if (!seekRestarting) record(s);     // a reload for seeking is not a new play
     }
     return _play.apply(this, arguments);
   };
@@ -361,6 +413,12 @@
   var sortMode = "added-asc";
   try { sortMode = localStorage.getItem("jmSort") || "added-asc"; } catch (e) {}
 
+  function playData() {
+    var last = {};
+    jget("jmHist_" + uname(), []).forEach(function (h) { if (!last[h.id]) last[h.id] = h.t; });
+    return { plays: jget("jmPlays_" + uname(), {}), last: last, favs: (typeof fav !== "undefined" && fav) ? fav : [] };
+  }
+
   var _refresh = window.refresh;
   window.refresh = function () {
     var out;
@@ -369,7 +427,8 @@
       out = _refresh.apply(this, arguments);
     } else {
       var saved = songs.map(function (s) { return s.added; });
-      var order = sortOrder(songs, sortMode, jget("jmPlays_" + uname(), {}));
+      var pd = playData();
+      var order = sortOrder(songs, sortMode, pd.plays, { last: pd.last, favs: pd.favs });
       order.forEach(function (s, i) { s.added = i; });   // temporary ranks
       try { out = _refresh.apply(this, arguments); }
       finally { songs.forEach(function (s, i) { s.added = saved[i]; }); }
@@ -380,12 +439,23 @@
 
   /* ---------------- extra items in each song's ⋮ menu ---------------- */
   function augmentRows() {
+    var augData = null;
     var rows = document.querySelectorAll("#songs .song-row");
     for (var i = 0; i < rows.length; i++) {
       var menu = rows[i].querySelector(".row-menu");
       if (!menu || menu.querySelector("[data-xinfo]")) continue;
       var id = rows[i].dataset.id;
       var s = songs.find(function (x) { return x.id === id; });
+      try {
+        var meta = rows[i].querySelector(".song-meta");
+        if (meta && (sortMode === "plays-desc" || sortMode === "recent-desc")) {
+          var pd2 = augData || (augData = playData());
+          var extraTxt = sortMode === "plays-desc"
+            ? (pd2.plays[id] ? " · ▶ " + pd2.plays[id] + (pd2.plays[id] === 1 ? " play" : " plays") : "")
+            : (pd2.last[id] ? " · " + ago(pd2.last[id]) : "");
+          if (extraTxt) meta.textContent += extraTxt;
+        }
+      } catch (e) {}
       var h = '<button data-xinfo="' + id + '">ℹ &nbsp;Song info</button>' +
         '<button data-xlyr="' + id + '">♪ &nbsp;Lyrics</button>' +
         '<button data-xshare="' + id + '">↗ &nbsp;Share</button>';
@@ -475,12 +545,14 @@
     /* clean header: only brand, search and the ⋮ menu */
     ".desktop-action{display:none!important}",
     /* the "All Songs | Sort | Playlists" row: same height, one line, evenly shared */
-    "html,body{max-width:100%;overflow-x:hidden}",
+    "html,body{max-width:100%;overflow-x:clip}",
     ".library-bar{display:flex;align-items:stretch;gap:8px;flex-wrap:nowrap}",
     ".library-bar .library-select,.library-bar .sort-sel,.library-bar .playlist-open-btn{height:46px;box-sizing:border-box;margin:0!important;padding:0 12px;font-size:14px;line-height:1.1}",
     ".library-bar .library-select{flex:1 1 0;min-width:0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}",
     ".library-bar .sort-sel{flex:1 1 0;min-width:0;max-width:none!important}",
     ".library-bar .playlist-open-btn{flex:0 0 auto;white-space:nowrap}",
+    /* progress bar: same look, taller touch area so it is easy to grab and drag */
+    ".progress-row #progress{box-sizing:content-box;height:5px;border:solid transparent;border-width:11px 0;background-clip:padding-box;touch-action:pan-y}",
     /* simple player */
     ".controls2{display:none!important}",
     "body,body.light{--player-height:178px!important}",
@@ -685,13 +757,19 @@
         '<option value="title-asc">Sort: title A–Z</option>' +
         '<option value="title-desc">Sort: title Z–A</option>' +
         '<option value="artist-asc">Sort: artist A–Z</option>' +
-        '<option value="plays-desc">Sort: most played</option>';
+        '<option value="plays-desc">Sort: most played</option>' +
+        '<option value="recent-desc">Sort: recently played</option>' +
+        '<option value="fav-first">Sort: favourites first</option>';
       sel.value = sortMode;
       sel.onchange = function () {
         sortMode = sel.value;
         try { localStorage.setItem("jmSort", sortMode); } catch (e) {}
         if (typeof shown !== "undefined") shown = PAGE;
         refresh();
+        var d = playData();
+        if (sortMode === "plays-desc" && !Object.keys(d.plays).length) toast("No play counts yet. They build up as you listen on this device.");
+        else if (sortMode === "recent-desc" && !Object.keys(d.last).length) toast("Nothing played yet on this device.");
+        else if (sortMode === "fav-first" && !d.favs.length) toast("No favourites yet. Tap ♡ on a song to add one.");
       };
       bar.insertBefore(sel, plBtn || null);
       if (plBtn) plBtn.style.marginLeft = "0";
@@ -797,6 +875,10 @@
       $("adminDlg").close();
       if (k === "diag") $("mDiag").click();
       else if (k === "log") $("mLog").click();
+      else if (k === "media") {
+        var box = document.getElementById("diagText"), dd = document.getElementById("diagDlg");
+        if (box && dd) { box.value = mediaCheck(); dd.showModal(); } else alert(mediaCheck());
+      }
       else if (k === "cache") {
         try { localStorage.removeItem("jmLibCache"); } catch (er) {}
         toast("Saved library cleared - refreshing...");
@@ -1030,6 +1112,7 @@
     $("admBody").innerHTML =
       '<button class="pbtn alt" type="button" data-tool="diag">🛠 Diagnostics</button>' +
       '<button class="pbtn alt" type="button" data-tool="log">🧾 Playback log</button>' +
+      '<button class="pbtn alt" type="button" data-tool="media">📣 Media controls check (notification shade)</button>' +
       '<button class="pbtn alt" type="button" data-tool="cache">⟳ Clear saved library &amp; refresh</button>' +
       '<div class="small-note">Activity logs for every person are saved as text files in your Drive folder (Activity).</div>';
   }
@@ -1043,6 +1126,70 @@
   /* ============================================================
    * START
    * ============================================================ */
+  /* ---------- manual seeking on the progress bar ----------
+     In screen-off mode the songs sit in one continuous stream. The phone can drop the
+     part that was already played, so dragging back landed on nothing and did nothing.
+     Now: if the spot is not available, the song is reloaded and the bar jumps there. */
+  function bufHas(t) {
+    try {
+      if (typeof sb === "undefined" || !sb) return true;
+      var b = sb.buffered;
+      for (var i = 0; i < b.length; i++) if (t >= b.start(i) - 0.05 && t <= b.end(i) + 0.05) return true;
+      return false;
+    } catch (e) { return true; }
+  }
+
+  // wait until the (re)loaded song is ready, then jump to the chosen spot
+  function seekWhenReady(s, frac) {
+    var my = ++seekGen, tries = 0;
+    var iv = setInterval(function () {
+      tries++;
+      if (my !== seekGen || tries > 80 || !now || now.id !== s.id) { clearInterval(iv); return; }
+      try {
+        if (typeof msMode !== "undefined" && msMode && seq.length && isFinite(seq[0].end) && seq[0].end > 0) {
+          clearInterval(iv);
+          au.currentTime = seq[0].start + frac * (seq[0].end - seq[0].start);
+          dlog("seek: jumped to " + Math.round(frac * 100) + "% after reload");
+        } else if (typeof msMode !== "undefined" && !msMode && loadedId === s.id && isFinite(au.duration) && au.duration > 0) {
+          clearInterval(iv);
+          au.currentTime = frac * au.duration;
+          dlog("seek: jumped to " + Math.round(frac * 100) + "%");
+        }
+      } catch (e) { clearInterval(iv); }
+    }, 250);
+  }
+
+  var _progInput = $("progress").oninput;
+  $("progress").oninput = function (e) {
+    var frac = (+e.target.value) / 100;
+    try {
+      if (typeof msMode !== "undefined" && msMode && seq.length) {
+        var c = seq[curIdx()], dur = isFinite(c.end) ? c.end - c.start : 0;
+        if (!dur) {                                   // first song still loading
+          toast("Still loading - will jump when ready");
+          if (now) seekWhenReady(now, frac);
+          return;
+        }
+        if (!bufHas(c.start + frac * dur)) {          // the phone dropped that part
+          dlog("seek: spot not in memory, reloading the song");
+          toast("Going back...");
+          var s0 = now;
+          seekRestarting = true;
+          try { play(s0); } finally { seekRestarting = false; }
+          seekWhenReady(s0, frac);
+          return;
+        }
+      } else if (isFinite(au.duration) && au.duration > 0) {
+        var sk = au.seekable, tgt = frac * au.duration;
+        if (sk && !sk.length) { toast("This source doesn't allow jumping around"); dlog("seek: source not seekable"); return; }
+        if (sk && sk.length && (tgt < sk.start(0) - 0.05 || tgt > sk.end(sk.length - 1) + 0.05)) {
+          toast("Can't jump there yet - wait a moment"); return;
+        }
+      }
+    } catch (err) { dlog("seek check failed: " + (err && err.message || err)); }
+    return _progInput && _progInput.call(this, e);
+  };
+
   mount();
   var savedTheme = null;
   try { savedTheme = localStorage.getItem("jmThemeName"); } catch (e) {}
@@ -1052,7 +1199,21 @@
   if (!savedTheme) savedTheme = document.body.classList.contains("light") ? "light" : "purple";
   applyTheme(savedTheme);
   try { refresh(); } catch (e) {}
-  window.__jmFeatures = "2.3";
-  dlog("add-on v2.3 loaded");
-  console.log("Jus Music features add-on v2.3 ready");
+  var lastMsLog = "";
+  au.addEventListener("playing", function () {
+    try {
+      if (now) msSet(now);
+      msState();
+      var k = (now && now.id) || "";
+      if (k !== lastMsLog) {
+        lastMsLog = k;
+        dlog("media: playing '" + (now && now.title) + "' session=" + ("mediaSession" in navigator ? navigator.mediaSession.playbackState : "n/a"));
+      }
+    } catch (e) {}
+  });
+  au.addEventListener("pause", msState);
+  au.addEventListener("ended", msState);
+  window.__jmFeatures = "2.6";
+  dlog("add-on v2.6 loaded");
+  console.log("Jus Music features add-on v2.6 ready");
 })();
