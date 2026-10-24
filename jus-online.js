@@ -27,7 +27,7 @@
     "https://de2.api.radio-browser.info"
   ];
 
-  var SRC_NAME = { ia: "Internet Archive", ov: "Openverse", jam: "Jamendo", radio: "Live radio", link: "Link", pv: "Apple preview (30 s)" };
+  var SRC_NAME = { ia: "Internet Archive", ov: "Openverse", jam: "Jamendo", radio: "Live radio", link: "Link" };
 
   var SITES = [
     { n: "Internet Archive · Audio", d: "Huge free library: music, old records, live recordings.", u: "https://archive.org/details/audio" },
@@ -530,7 +530,7 @@
     "body.net-mode #netView{display:block}",
     ".scope-row{display:flex;gap:8px;margin-top:10px}",
     ".scope-row .chip{flex:1;padding:8px 10px;font-size:14px;text-align:center}",
-    "html,body{max-width:100%;overflow-x:hidden}",
+    "html,body{max-width:100%;overflow-x:clip}",
     "main{min-width:0}",
     "#netView{max-width:100%;min-width:0}",
     ".net-sources{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 10px}",
@@ -551,8 +551,9 @@
     ".site-card a{flex-shrink:0;text-decoration:none;padding:9px 14px;font-size:13px;color:#fff}",
     ".hint-btn{display:block;width:100%;text-align:left;border:1px dashed var(--border);background:var(--surface-2);color:var(--text);border-radius:12px;padding:11px 12px;cursor:pointer;font-size:14px}",
     ".net-h{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-soft);margin:6px 2px 0}",
-    ".web-item.meta .art{width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0}",
-    ".web-item.meta{cursor:default}",
+    ".web-item.best{border-color:var(--accent);background:rgba(155,92,255,.14)}",
+    "body.themed .web-item.best{background:rgba(var(--acc),.14)}",
+    ".web-item.lib{border-style:dashed}",
     ".web-btn{text-decoration:none}",
     ".listen-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--text-soft)}",
     ".listen-row a.chip{text-decoration:none;padding:6px 11px;font-size:12px}",
@@ -796,50 +797,52 @@
     play(r.track);
   }
 
-  function libCount(query) {
+  // songs in My library that match what was typed (so they show up in Online results too)
+  function libMatches(query) {
     try {
       var words = queryTerms(query);
-      if (!words.length || typeof songs === "undefined") return 0;
-      return songs.filter(function (x) {
+      if (!words.length || typeof songs === "undefined") return [];
+      var res = songs.filter(function (x) {
         var hay = normQuery(String(x.title || "") + " " + String(x.artist || "")).toLowerCase();
         return words.every(function (w) { return hay.indexOf(w) >= 0; });
-      }).length;
-    } catch (e) { return 0; }
+      });
+      return rankItems(res, query);
+    } catch (e) { return []; }
   }
 
   function shownItems() { return (netShowWeak && !netBack) ? netItems.concat(netWeak) : netItems; }
 
-  function rowHtml(t, i) {
+  function rowHtml(t, i, best) {
     var sn = SRC_NAME[t.src] || "";
+    var cls = "web-item" + (best ? " best" : "");
     if (t.kind === "album") {
-      return '<div class="web-item" data-open="' + i + '"><div class="web-info"><b>' + esc2(t.title) +
+      return '<div class="' + cls + '" data-open="' + i + '"><div class="web-info"><b>' + esc2(t.title) +
         "</b><span>" + esc2(t.artist) + " · " + esc2(sn) + ' · tap to open</span></div><span class="web-go">›</span></div>';
     }
     var on = now && now.id === t.id;
-    return '<div class="web-item' + (on ? " on" : "") + '"><div class="web-info" data-play="' + i + '"><b>' +
+    return '<div class="' + cls + (on ? " on" : "") + '"><div class="web-info" data-play="' + i + '"><b>' +
       esc2(t.title) + "</b><span>" + esc2(t.artist) + " · " + esc2(sn) + (t.live ? " · LIVE" : "") +
       '</span></div><button class="web-btn" type="button" data-save="' + i + '">' +
       (isSaved(t.id) ? "♥" : "♡") + "</button></div>";
   }
 
-  function metaCard(x, i) {
-    var sub = [x.artist, x.album, x.year].filter(Boolean).join(" · ");
-    return '<div class="web-item meta">' +
-      (x.art ? '<img class="art" src="' + esc2(x.art) + '" alt="" width="44" height="44" loading="lazy">' : "") +
-      '<div class="web-info"><b>' + esc2(x.title) + "</b><span>" + esc2(sub) + "</span></div>" +
-      (x.preview ? '<button class="web-btn" type="button" data-pv="' + i + '" title="30-second preview">▶</button>' : "") +
-      (x.link ? '<a class="web-btn" href="' + esc2(x.link) + '" target="_blank" rel="noopener noreferrer" title="Open in Apple Music">↗</a>' : "") +
-      "</div>";
+  function libRow(x) {
+    var on = now && now.id === x.id;
+    return '<div class="web-item lib' + (on ? " on" : "") + '" data-libplay="' + esc2(x.id) + '"><div class="web-info"><b>' +
+      esc2(x.title) + "</b><span>" + esc2(x.artist || "Unknown") + " · In My library</span></div>" +
+      '<span class="web-go">▶</span></div>';
   }
 
-  // hints, the reference match and "listen in full" links, shown above the results
+  // My library matches and the "did you mean" hint, shown above the online results
   function topSection() {
     if (netSrc === "saved" || netSrc === "sites" || netSrc === "link" || !netQ) return "";
     var h = "";
-    var lib = libCount(netQ);
-    if (lib) {
-      h += '<button class="hint-btn" type="button" data-lib="1">📚 ' + lib + " matching song" + (lib === 1 ? "" : "s") +
-        " in My library — show</button>";
+    var lib = libMatches(netQ);
+    if (lib.length) {
+      h += '<div class="net-h">In My library</div>' + lib.slice(0, 5).map(libRow).join("");
+      if (lib.length > 5) {
+        h += '<button class="hint-btn" type="button" data-lib="1">Show all ' + lib.length + " in My library</button>";
+      }
     }
     var m = netMeta[0];
     if (m) {
@@ -848,55 +851,68 @@
       if (!covers) {
         h += '<button class="hint-btn" type="button" data-dym="0">Did you mean “' + esc2(m.title) + "”? Search again</button>";
       }
-      h += '<div class="net-h">Reference match · 30-second previews</div>';
-      netMeta.slice(0, 2).forEach(function (x, i) { h += metaCard(x, i); });
     }
+    return h;
+  }
+
+  // links to listen in full on the big music sites (they open in their own tab)
+  function listenSection() {
+    if (netSrc === "saved" || netSrc === "sites" || netSrc === "link" || !netQ || netBack) return "";
+    var m = netMeta[0];
     var lk = listenLinks(m ? m.title + " " + m.artist : netQ);
-    h += '<div class="listen-row"><span>Listen in full on:</span>' + lk.map(function (a) {
+    if (m && m.link) lk.push({ n: "Apple Music", u: m.link });
+    return '<div class="listen-row"><span>Not here? Listen in full on:</span>' + lk.map(function (a) {
       return '<a class="chip" href="' + esc2(a.u) + '" target="_blank" rel="noopener noreferrer">' + esc2(a.n) + "</a>";
     }).join("") + "</div>";
-    return h;
   }
 
   function renderNet() {
     var L = $("netList");
     var top = netBack ? "" : topSection();
-    if (!netItems.length && !top && !netWeak.length) { if (netSrc !== "sites") L.innerHTML = ""; return; }
+    if (!netItems.length && !top && !netWeak.length && !(netQ && !netBack && netSrc !== "sites" && netSrc !== "link" && netSrc !== "saved")) {
+      if (netSrc !== "sites") L.innerHTML = "";
+      return;
+    }
     var html = top;
     if (netBack) {
       html += '<button class="pbtn alt" id="netBackBtn" type="button">← Back to results</button>';
+      html += netItems.map(function (t, i) { return rowHtml(t, i, false); }).join("");
+    } else if (netItems.length) {
+      var words = queryTerms(netQ);
+      var best = words.length && wordHits(netItems[0], words) === words.length;
+      html += '<div class="net-h">' + (best ? "Best match · tap to play" : (netQ ? "Closest matches" : "Popular")) + "</div>";
+      netItems.forEach(function (t, i) {
+        if (i === 1 && best) html += '<div class="net-h">Not the right one? Pick another</div>';
+        html += rowHtml(t, i, best && i === 0);
+      });
     }
-    html += netItems.map(function (t, i) { return rowHtml(t, i); }).join("");
     if (!netBack && netWeak.length) {
       if (netShowWeak) {
         html += '<div class="net-h">Loosely related</div>' +
-          netWeak.map(function (t, i) { return rowHtml(t, netItems.length + i); }).join("");
+          netWeak.map(function (t, i) { return rowHtml(t, netItems.length + i, false); }).join("");
       } else {
         html += '<button class="pbtn alt" type="button" data-weak="1">Show ' + netWeak.length + " loosely related results</button>";
       }
     }
+    html += listenSection();
     L.innerHTML = html;
   }
 
   function onListClick(e) {
-    var b = e.target.closest("[data-open],[data-play],[data-save],[data-lib],[data-dym],[data-pv],[data-weak],#netBackBtn");
+    var b = e.target.closest("[data-open],[data-play],[data-save],[data-lib],[data-libplay],[data-dym],[data-weak],#netBackBtn");
     if (!b) return;
     var list = shownItems();
     if (b.id === "netBackBtn") { netItems = netBack; netBack = null; renderNet(); return; }
     if (b.dataset.weak !== undefined) { netShowWeak = true; renderNet(); return; }
     if (b.dataset.lib !== undefined) { setScope("lib"); return; }
+    if (b.dataset.libplay !== undefined) {
+      var ls = (typeof songs !== "undefined" ? songs : []).filter(function (x) { return x.id === b.dataset.libplay; })[0];
+      if (ls) { play(ls); renderNet(); }
+      return;
+    }
     if (b.dataset.dym !== undefined) {
       var mm = netMeta[+b.dataset.dym];
       if (mm) { $("search").value = mm.title; clearTimeout(netT); netRun(); }
-      return;
-    }
-    if (b.dataset.pv !== undefined) {
-      var x = netMeta[+b.dataset.pv];
-      if (!x || !x.preview) return;
-      var pt = { kind: "track", online: true, src: "pv", live: false, id: "web:pv:" + x.title + "|" + x.artist,
-        title: x.title + " (30 s preview)", artist: x.artist, url: x.preview };
-      netQueue = [pt];
-      play(pt);
       return;
     }
     if (b.dataset.open !== undefined) { openAlbum(list[+b.dataset.open]); return; }
@@ -909,7 +925,7 @@
   }
 
   mount();
-  window.__jmOnline = "2.2";
-  dlog("add-on v2.2 loaded");
-  console.log("Jus Music online add-on v2.2 ready");
+  window.__jmOnline = "2.3";
+  dlog("add-on v2.3 loaded");
+  console.log("Jus Music online add-on v2.3 ready");
 })();
