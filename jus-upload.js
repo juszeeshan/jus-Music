@@ -17,7 +17,7 @@
 
   /* Paste your OAuth client ID here, between the quotes.
      It looks like 123456789-abcdefg.apps.googleusercontent.com */
-  var GOOGLE_CLIENT_ID = "";
+  var GOOGLE_CLIENT_ID = "102701213826-89robf5p903q0774jt2ej4cjgog621p2.apps.googleusercontent.com";
 
   var FOLDER_NAME = "Jus Music";
   var MAX_MB = 200;
