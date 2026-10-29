@@ -1,5 +1,5 @@
 /*
- * JUS MUSIC - FEATURES ADD-ON (v2.6)   file: jus-features.js
+ * JUS MUSIC - FEATURES ADD-ON (v2.7)   file: jus-features.js
  *
  * REPLACES the earlier jus-features.js (same file name, new content).
  *
@@ -111,6 +111,7 @@
       week: songs.filter(function (s) { return s.added > (nowMs || Date.now()) - 6048e5; }).length,
       noArtist: songs.filter(function (s) { return !s.artist || /^unknown$/i.test(s.artist); }).length,
       restricted: songs.filter(function (s) { return s.visibility && s.visibility !== "shared"; }).length,
+      missing: songs.filter(function (s) { return s.missing; }).length,
       lang: by(function (s) { return s.language; }),
       owner: by(function (s) { return s.owner; })
     };
@@ -579,6 +580,34 @@
     ".sheet-item .val{margin-left:auto;color:var(--text-soft);font-size:14px}",
     ".sheet-vol{display:flex;align-items:center;gap:14px;padding:10px 12px}",
     ".sheet-vol input{flex:1;accent-color:var(--accent)}",
+    /* phone turned sideways (landscape): short screen, so everything gets compact */
+    "@media (orientation:landscape) and (max-height:520px){",
+    "body,body.light{--player-height:112px!important}",
+    "header{padding:6px max(14px,env(safe-area-inset-right)) 6px max(14px,env(safe-area-inset-left))}",
+    ".header-row{gap:10px}",
+    ".brand-icon{font-size:22px}.brand-title{font-size:19px}",
+    ".header-btn{width:38px;height:38px}.header-icon{font-size:18px}",
+    ".mobile-menu{top:52px}",
+    ".search-wrap{margin-top:6px}#search{padding:8px 14px;font-size:15px}",
+    ".scope-row{margin-top:6px}.scope-row .chip{padding:6px 10px;font-size:13px}",
+    "main{padding:10px max(14px,env(safe-area-inset-right)) 16px max(14px,env(safe-area-inset-left))}",
+    ".library-bar{margin:0 0 10px}",
+    ".library-bar .library-select,.library-bar .sort-sel,.library-bar .playlist-open-btn{height:40px;font-size:13px}",
+    ".section-title{margin:6px 0 8px}",
+    ".song-row{min-height:54px;padding:6px 10px}.song-name{font-size:15px}",
+    "#songs{grid-template-columns:repeat(2,minmax(0,1fr))}",
+    "#player{padding:6px max(14px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}",
+    "#player .player-inner{max-width:none;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'np ctl' 'prog ctl' 'st ctl';column-gap:22px;row-gap:2px;align-items:center}",
+    ".np-row{grid-area:np;margin:0}.progress-row{grid-area:prog}",
+    ".controls{grid-area:ctl;margin:0;gap:10px}",
+    ".controls .control-btn,.controls .control-btn.main{flex:0 0 44px;max-width:44px;width:44px}",
+    "#status{grid-area:st;margin:0;text-align:left;font-size:11px;min-height:14px}",
+    "#nowPlaying{text-align:left;font-size:14px}",
+    "#volumePopup{display:none!important}",
+    "dialog .card{max-height:92vh;overflow:auto;padding:14px}",
+    "dialog.sheet{max-height:100vh;overflow:auto}",
+    "#auth{align-items:flex-start;overflow:auto}",
+    "}",
     /* misc windows */
     ".sort-sel{border:1px solid var(--border);background:linear-gradient(145deg,var(--surface-3),var(--surface-2));color:var(--text);border-radius:14px;padding:11px 10px;cursor:pointer;max-width:150px;font-size:14px}",
     ".info-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px}",
@@ -1085,7 +1114,8 @@
       '<div class="stat"><b>' + s.total + "</b><span>Songs</span></div>" +
       '<div class="stat"><b>' + s.week + "</b><span>Added this week</span></div>" +
       '<div class="stat"><b>' + s.restricted + "</b><span>Private / admin-only</span></div>" +
-      '<div class="stat"><b>' + s.noArtist + "</b><span>Missing artist</span></div></div>" +
+      '<div class="stat"><b>' + s.noArtist + "</b><span>Missing artist</span></div>" +
+      '<div class="stat"><b>' + s.missing + "</b><span>File removed by uploader</span></div></div>" +
       '<div class="adm-sub">By language</div>' + barRows(topEntries(s.lang, 8)) +
       '<div class="adm-sub">By uploader</div>' + barRows(topEntries(s.owner, 8));
   }
@@ -1213,7 +1243,7 @@
   });
   au.addEventListener("pause", msState);
   au.addEventListener("ended", msState);
-  window.__jmFeatures = "2.6";
-  dlog("add-on v2.6 loaded");
-  console.log("Jus Music features add-on v2.6 ready");
+  window.__jmFeatures = "2.7";
+  dlog("add-on v2.7 loaded");
+  console.log("Jus Music features add-on v2.7 ready");
 })();
