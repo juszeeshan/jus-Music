@@ -1,5 +1,5 @@
 /*
- * JUS MUSIC - FEATURES ADD-ON (v2.7)   file: jus-features.js
+ * JUS MUSIC - FEATURES ADD-ON (v2.8)   file: jus-features.js
  *
  * REPLACES the earlier jus-features.js (same file name, new content).
  *
@@ -423,6 +423,7 @@
   var _refresh = window.refresh;
   window.refresh = function () {
     var out;
+    try { closePortal(); } catch (e) {}
     try { cleanArtists(); } catch (e) {}
     if (!songs || !songs.length || sortMode === "added-asc") {
       out = _refresh.apply(this, arguments);
@@ -435,6 +436,7 @@
       finally { songs.forEach(function (s, i) { s.added = saved[i]; }); }
     }
     try { augmentRows(); } catch (e) {}
+    try { var pbar = document.getElementById("plBar"); if (pbar) pbar.classList.toggle("hide", plView === null); } catch (e) {}
     return out;
   };
 
@@ -461,6 +463,11 @@
         '<button data-xlyr="' + id + '">♪ &nbsp;Lyrics</button>' +
         '<button data-xshare="' + id + '">↗ &nbsp;Share</button>';
       if (canDownload(s, me)) h += '<button data-xdl="' + id + '">⬇ &nbsp;Download</button>';
+      if (typeof plView !== "undefined" && plView !== null) {
+        h = '<button data-xplrm="' + id + '">− &nbsp;Remove from this playlist</button>' +
+          '<button data-xplup="' + id + '">↑ &nbsp;Move up</button>' +
+          '<button data-xpldn="' + id + '">↓ &nbsp;Move down</button>' + h;
+      }
       menu.insertAdjacentHTML("afterbegin", h);
     }
   }
@@ -554,6 +561,21 @@
     ".library-bar .playlist-open-btn{flex:0 0 auto;white-space:nowrap}",
     /* progress bar: same look, taller touch area so it is easy to grab and drag */
     ".progress-row #progress{box-sizing:content-box;height:5px;border:solid transparent;border-width:11px 0;background-clip:padding-box;touch-action:pan-y}",
+    /* layers: lists and menus always sit above the player */
+    ".library-menu{z-index:70!important;max-height:min(60vh,calc(100dvh - 240px))!important}",
+    ".pm-backdrop{position:fixed;inset:0;z-index:89;background:transparent}",
+    ".pm-menu{position:fixed;z-index:90;min-width:220px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);box-shadow:var(--shadow);display:grid;gap:2px;overflow:auto;overscroll-behavior:contain}",
+    ".pm-menu button{border:0;background:transparent;color:var(--text);text-align:left;padding:13px 12px;border-radius:10px;cursor:pointer;font-size:15px}",
+    ".pm-menu button:hover,.pm-menu button:active{background:var(--surface-3)}",
+    ".pm-menu .danger{color:#ff8a8a}",
+    ".online-btn{white-space:nowrap}",
+    ".sort-list{display:grid;gap:2px}",
+    ".sort-list .sheet-item.on{background:var(--surface-3);font-weight:700}",
+    ".pl-bar{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}",
+    ".pl-bar .chip{padding:9px 14px;font-size:13px}",
+    ".pl-bar .chip.danger{color:#ff8a8a}",
+    ".playlist-delete,.playlist-rename{float:right;border:0;background:transparent;color:var(--text-soft);cursor:pointer;font-size:20px;padding:6px 9px;margin:-8px -6px 0 0;line-height:1}",
+    ".fb-msg{white-space:normal!important;color:var(--text);font-size:14px!important;line-height:1.4}",
     /* simple player */
     ".controls2{display:none!important}",
     "body,body.light{--player-height:178px!important}",
@@ -695,9 +717,19 @@
       '<div class="web-tabs" id="admTabs" style="display:flex;gap:6px;flex-wrap:wrap">' +
       '<button class="chip on" type="button" data-at="ov">Overview</button>' +
       '<button class="chip" type="button" data-at="us">Users</button>' +
+      '<button class="chip" type="button" data-at="fb">Feedback</button>' +
       '<button class="chip" type="button" data-at="tl">Tools</button></div>' +
       '<div id="admBody" class="adm-list" style="max-height:52vh"></div>' +
       '<button id="admClose" class="pbtn alt" type="button">Close</button>');
+    dlg("sortDlg", '<h2>⇅ Sort songs</h2><div id="sortList" class="sort-list"></div>' +
+      '<button id="sortClose" class="pbtn alt" type="button">Close</button>');
+    dlg("fbDlg", '<h2>💬 Send feedback</h2>' +
+      '<div class="small-note">Tell the admin what to improve, or report a problem.</div>' +
+      '<select id="fbType" class="in"><option>Idea</option><option>Problem</option><option>Song problem</option><option>Other</option></select>' +
+      '<textarea id="fbText" class="in" rows="5" maxlength="1000" placeholder="Write here..."></textarea>' +
+      '<div id="fbMsg" class="small-note"></div>' +
+      '<button id="fbSend" class="pbtn" type="button">Send</button>' +
+      '<button id="fbClose" class="pbtn alt" type="button">Close</button>');
 
     /* ---- simple player: heart + title + ⋯ on one row ---- */
     try {
@@ -735,9 +767,12 @@
       if (!document.getElementById("mHist")) mm.appendChild(mbtn("mHist", "🕘 &nbsp; History", openHist));
       mm.appendChild(mbtn("mThemePick", "🎨 &nbsp; Theme", openTheme));
       mm.appendChild(mbtn("mAdmin", "👑 &nbsp; Admin dashboard", openAdmin));
+      mm.appendChild(mbtn("mSort", "⇅ &nbsp; Sort songs", openSort));
+      mm.appendChild(mbtn("mFeedback", "💬 &nbsp; Send feedback", openFeedback));
 
       var hide = function (id) { var e = document.getElementById(id); if (e) e.classList.add("hide"); };
       hide("mTheme");
+      hide("mStream");                       // screen-off mode is always on, no switch needed
 
       var heading = function (title, adm) {
         var h = document.createElement("div");
@@ -755,13 +790,13 @@
         });
       };
       heading("Library");
-      put(["mWeb", "mDev", "mHist", "mUpload", "mSync"]);
+      put(["mWeb", "mSort", "mDev", "mHist", "mUpload", "mSync"]);
       heading("Appearance");
       put(["mThemePick"]);
       heading("Player");
-      put(["sleepBtn", "mStream"]);
+      put(["sleepBtn"]);
       heading("Account");
-      put(["mAccount", "mLogout"]);
+      put(["mAccount", "mFeedback", "mLogout"]);
       heading("Admin tools", true);
       put(["mAdmin", "mDiag", "mLog"], true);
       updateAdminVisibility();
@@ -773,39 +808,33 @@
 
     } catch (e) { fail("menu", e); }
 
-    /* ---- sort menu in the library bar ---- */
+    /* ---- library bar: an "Online" button (sorting now lives in the ⋮ menu) ---- */
     try {
     var bar = document.querySelector(".library-bar");
     var plBtn = document.getElementById("playlistOpenBtn");
     if (bar) {
-      var sel = document.createElement("select");
-      sel.id = "sortSel"; sel.className = "sort-sel"; sel.title = "Sort songs";
-      sel.innerHTML =
-        '<option value="added-asc">Sort: oldest</option>' +
-        '<option value="added-desc">Sort: newest</option>' +
-        '<option value="title-asc">Sort: title A–Z</option>' +
-        '<option value="title-desc">Sort: title Z–A</option>' +
-        '<option value="artist-asc">Sort: artist A–Z</option>' +
-        '<option value="plays-desc">Sort: most played</option>' +
-        '<option value="recent-desc">Sort: recently played</option>' +
-        '<option value="fav-first">Sort: favourites first</option>';
-      sel.value = sortMode;
-      sel.onchange = function () {
-        sortMode = sel.value;
-        try { localStorage.setItem("jmSort", sortMode); } catch (e) {}
-        if (typeof shown !== "undefined") shown = PAGE;
-        refresh();
-        var d = playData();
-        if (sortMode === "plays-desc" && !Object.keys(d.plays).length) toast("No play counts yet. They build up as you listen on this device.");
-        else if (sortMode === "recent-desc" && !Object.keys(d.last).length) toast("Nothing played yet on this device.");
-        else if (sortMode === "fav-first" && !d.favs.length) toast("No favourites yet. Tap ♡ on a song to add one.");
+      var ob = document.createElement("button");
+      ob.id = "onlineBtn"; ob.type = "button"; ob.className = "playlist-open-btn online-btn"; ob.title = "Search online";
+      ob.innerHTML = "🌐 Online";
+      ob.onclick = function () {
+        var m = document.getElementById("mWeb");
+        if (m) m.click(); else toast("Online music is not available");
       };
-      bar.insertBefore(sel, plBtn || null);
-      if (plBtn) plBtn.style.marginLeft = "0";
-      sel.style.marginLeft = "auto";
+      bar.insertBefore(ob, plBtn || null);
     }
+    var sl = document.getElementById("sortSel"); if (sl) sl.style.display = "none";
 
-    } catch (e) { fail("sort menu", e); }
+    // playlist tools above the song list while a playlist is open
+    var sg = document.getElementById("songs");
+    if (sg && sg.parentNode) {
+      var pb = document.createElement("div");
+      pb.id = "plBar"; pb.className = "pl-bar hide";
+      pb.innerHTML = '<button class="chip" id="plBack" type="button">← Playlists</button>' +
+        '<button class="chip" id="plRename" type="button">✎ Rename</button>' +
+        '<button class="chip danger" id="plDelete" type="button">🗑 Delete playlist</button>';
+      sg.parentNode.insertBefore(pb, sg);
+    }
+    } catch (e) { fail("library bar", e); }
 
     /* ---- wiring ---- */
     try {
@@ -898,6 +927,13 @@
         if (r && r.ok) loadUsers(); else { alert((r && r.error) || "Could not change the role"); b.disabled = false; }
         return;
       }
+      var fd = e.target.closest("[data-fbdone]");
+      if (fd) {
+        fd.disabled = true;
+        var rr = await call("resolveFeedback", { id: fd.dataset.fbdone });
+        if (rr && rr.ok) loadFeedback(); else { alert((rr && rr.error) || "Could not update"); fd.disabled = false; }
+        return;
+      }
       var t = e.target.closest("[data-tool]");
       if (!t) return;
       var k = t.dataset.tool;
@@ -915,10 +951,61 @@
       }
     };
 
+    /* sort chooser */
+    $("sortClose").onclick = function () { $("sortDlg").close(); };
+    $("sortList").onclick = function (e) {
+      var b = e.target.closest("[data-sm]");
+      if (b) { applySort(b.dataset.sm); $("sortDlg").close(); }
+    };
+
+    /* feedback */
+    $("fbClose").onclick = function () { $("fbDlg").close(); };
+    $("fbSend").onclick = sendFeedback;
+
+    /* playlist tools */
+    $("plBack").onclick = function () {
+      plView = null; shown = PAGE;
+      $("playlistPanel").classList.add("open");
+      refresh();
+    };
+    $("plRename").onclick = function () {
+      var p = pls[plView]; if (!p) return;
+      var n = prompt("Playlist name:", p.name);
+      if (n && n.trim()) { p.name = n.trim().slice(0, 60); savePl(); refresh(); }
+    };
+    $("plDelete").onclick = function () {
+      var p = pls[plView]; if (!p) return;
+      if (!confirm("Delete the playlist “" + p.name + "”? Your songs are not deleted.")) return;
+      pls.splice(plView, 1); plView = null; savePl(); refresh();
+    };
+    // rename button on each playlist card (capture: the card itself would otherwise open)
+    $("playlistGrid").addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (t && t.dataset && t.dataset.prename !== undefined) {
+        ev.stopImmediatePropagation(); ev.preventDefault();
+        var p = pls[+t.dataset.prename]; if (!p) return;
+        var n = prompt("Playlist name:", p.name);
+        if (n && n.trim()) { p.name = n.trim().slice(0, 60); savePl(); refresh(); }
+      }
+    }, true);
+
+    /* the ⋮ menu of a song opens as its own layer above everything (never behind the player,
+       and a tap on it can never reach the song underneath) */
+    $("songs").addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (t && t.dataset && t.dataset.more) {
+        ev.stopImmediatePropagation(); ev.preventDefault();
+        var row = t.closest(".song-row");
+        if (row) openPortal(t, row);
+      }
+    }, true);
+    window.addEventListener("scroll", function () { if (pm) closePortal(); }, { passive: true });
+    window.addEventListener("resize", function () { closePortal(); });
+
     /* clicks on the extra items in each song's ⋮ menu */
     $("songs").addEventListener("click", function (ev) {
       var d = ev.target.dataset || {};
-      var id = d.xinfo || d.xlyr || d.xshare || d.xdl;
+      var id = d.xinfo || d.xlyr || d.xshare || d.xdl || d.xplrm || d.xplup || d.xpldn;
       if (!id) return;
       var s = songById(id);
       if (typeof closeMenus === "function") closeMenus();
@@ -927,6 +1014,9 @@
       else if (d.xlyr) openLyrics(s);
       else if (d.xshare) shareSong(s);
       else if (d.xdl) downloadSong(s);
+      else if (d.xplrm) movePl(id, "rm");
+      else if (d.xplup) movePl(id, "up");
+      else if (d.xpldn) movePl(id, "down");
     });
     } catch (e) { fail("wiring", e); }
   }
@@ -977,6 +1067,149 @@
 
   /* ---- theme ---- */
   function openTheme() { applyTheme(themeId); $("themeDlg").showModal(); }
+
+  /* ---- sorting (chooser in the ⋮ menu) ---- */
+  var SORTS = [
+    ["added-asc", "Oldest first"], ["added-desc", "Newest first"], ["title-asc", "Title A–Z"], ["title-desc", "Title Z–A"],
+    ["artist-asc", "Artist A–Z"], ["plays-desc", "Most played"], ["recent-desc", "Recently played"], ["fav-first", "Favourites first"]
+  ];
+  function sortName() {
+    for (var i = 0; i < SORTS.length; i++) if (SORTS[i][0] === sortMode) return SORTS[i][1];
+    return SORTS[0][1];
+  }
+  function applySort(mode) {
+    sortMode = mode;
+    try { localStorage.setItem("jmSort", sortMode); } catch (e) {}
+    if (typeof shown !== "undefined") shown = PAGE;
+    refresh();
+    var b = document.getElementById("mSort");
+    if (b) b.innerHTML = "⇅ &nbsp; Sort: " + esc2(sortName());
+    var d = playData();
+    if (sortMode === "plays-desc" && !Object.keys(d.plays).length) toast("No play counts yet. They build up as you listen on this device.");
+    else if (sortMode === "recent-desc" && !Object.keys(d.last).length) toast("Nothing played yet on this device.");
+    else if (sortMode === "fav-first" && !d.favs.length) toast("No favourites yet. Tap ♡ on a song to add one.");
+    else toast("Sorted: " + sortName());
+  }
+  function openSort() {
+    $("sortList").innerHTML = SORTS.map(function (x) {
+      return '<button class="sheet-item' + (x[0] === sortMode ? " on" : "") + '" type="button" data-sm="' + x[0] + '"><span class="ic">' +
+        (x[0] === sortMode ? "✓" : "") + "</span>" + esc2(x[1]) + "</button>";
+    }).join("");
+    $("sortDlg").showModal();
+  }
+
+  /* ---- a song's ⋮ menu as a layer above everything ---- */
+  var pm = null, pbd = null, pmOrig = [];
+  function closePortal() {
+    if (pm) { try { pm.remove(); } catch (e) {} pm = null; }
+    if (pbd) { try { pbd.remove(); } catch (e) {} pbd = null; }
+    pmOrig = [];
+  }
+  function openPortal(btn, row) {
+    closePortal();
+    var orig = row.querySelector(".row-menu");
+    if (!orig) return;
+    var items = orig.querySelectorAll("button");
+    if (!items.length) return;
+    pmOrig = Array.prototype.slice.call(items);
+    pbd = document.createElement("div");
+    pbd.className = "pm-backdrop";
+    // a tap anywhere else only closes the menu, it never reaches the songs behind
+    pbd.onclick = function (e) { e.preventDefault(); e.stopPropagation(); closePortal(); };
+    document.body.appendChild(pbd);
+    pm = document.createElement("div");
+    pm.className = "pm-menu";
+    pm.innerHTML = pmOrig.map(function (b, i) {
+      return '<button type="button" class="' + esc2(b.className || "") + '" data-ix="' + i + '">' + b.innerHTML + "</button>";
+    }).join("");
+    pm.onclick = function (e) {
+      e.stopPropagation();
+      var c = e.target.closest("[data-ix]");
+      if (!c) return;
+      var target = pmOrig[+c.dataset.ix];
+      closePortal();
+      if (target) setTimeout(function () { target.click(); }, 0);   // runs the normal action for that item
+    };
+    pm.style.visibility = "hidden";
+    document.body.appendChild(pm);
+    var r = btn.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    var mw = pm.offsetWidth, mh = pm.offsetHeight, gap = 8;
+    var maxH = vh - gap * 2;
+    if (mh > maxH) { pm.style.maxHeight = maxH + "px"; mh = maxH; }
+    var top = r.bottom + 4;
+    if (top + mh > vh - gap) top = r.top - mh - 4;            // not enough room below: open upwards
+    if (top < gap) top = Math.max(gap, Math.min(vh - mh - gap, top));
+    var left = Math.min(Math.max(gap, r.right - mw), vw - mw - gap);
+    pm.style.top = top + "px"; pm.style.left = left + "px";
+    pm.style.visibility = "";
+  }
+
+  /* ---- playlists: remove a song, move it, rename, delete ---- */
+  function movePl(id, op) {
+    var p = pls[plView];
+    if (!p) return;
+    var i = p.ids.indexOf(id);
+    if (i < 0) return;
+    if (op === "rm") p.ids.splice(i, 1);
+    else if (op === "up" && i > 0) { var t = p.ids[i - 1]; p.ids[i - 1] = p.ids[i]; p.ids[i] = t; }
+    else if (op === "down" && i < p.ids.length - 1) { var u = p.ids[i + 1]; p.ids[i + 1] = p.ids[i]; p.ids[i] = u; }
+    savePl();
+    refresh();
+    toast(op === "rm" ? "Removed from “" + p.name + "”" : "Moved");
+  }
+
+  var _renderPl = window.renderPl;
+  window.renderPl = function () {
+    var r = _renderPl ? _renderPl.apply(this, arguments) : undefined;
+    try {
+      var cards = document.querySelectorAll("#playlistGrid .playlist-card");
+      for (var i = 0; i < cards.length; i++) {
+        var del = cards[i].querySelector(".playlist-delete");
+        if (del && !cards[i].querySelector(".playlist-rename")) {
+          del.insertAdjacentHTML("afterend", '<button class="playlist-rename" data-prename="' + cards[i].dataset.pl + '" title="Rename">✎</button>');
+        }
+      }
+    } catch (e) {}
+    return r;
+  };
+
+  /* ---- feedback ---- */
+  function openFeedback() {
+    $("fbMsg").textContent = "";
+    $("fbSend").disabled = false;
+    $("fbDlg").showModal();
+  }
+  async function sendFeedback() {
+    var text = $("fbText").value.trim();
+    if (!text) { $("fbMsg").textContent = "Write something first"; return; }
+    $("fbSend").disabled = true;
+    $("fbMsg").textContent = "Sending...";
+    var ctxText = (now ? now.title + " — " + now.artist : "") + " | v" + (window.__jmFeatures || "?");
+    var j = await call("addFeedback", { type: $("fbType").value, message: text, context: ctxText });
+    if (j && j.ok) {
+      $("fbText").value = "";
+      $("fbMsg").textContent = "Thank you! Your message was sent.";
+      setTimeout(function () { $("fbDlg").close(); }, 1200);
+    } else {
+      var err = (j && j.error) || "Could not send";
+      $("fbMsg").textContent = /unknown action/i.test(err) ? "Feedback needs the new sheet backend." : err;
+      $("fbSend").disabled = false;
+    }
+  }
+  async function loadFeedback() {
+    var box = $("admBody");
+    box.textContent = "Loading feedback...";
+    var j = await call("listFeedback");
+    if (!j || !j.ok) { box.textContent = (j && j.error) || "Could not load feedback."; return; }
+    if (!j.items.length) { box.innerHTML = '<div class="empty">No feedback yet.</div>'; return; }
+    box.innerHTML = j.items.map(function (f) {
+      var when = f.time ? ago(Date.parse(f.time)) : "";
+      return '<div class="x-item fb-item" style="cursor:default;align-items:flex-start"><div class="t"><b>' + esc2(f.type) + " · " + esc2(f.user) + "</b>" +
+        '<span class="fb-msg">' + esc2(f.message) + "</span>" +
+        "<span>" + esc2(when) + (f.context ? " · " + esc2(f.context) : "") + (f.status === "done" ? " · ✓ done" : "") + "</span></div>" +
+        (f.status === "done" ? "" : '<button class="pbtn alt" type="button" data-fbdone="' + esc2(f.id) + '">Done</button>') + "</div>";
+    }).join("");
+  }
 
   /* ---- song info ---- */
   var VLAB = { shared: "Everyone", private: "Only the uploader", admin: "Uploader + admins" };
@@ -1098,6 +1331,7 @@
     for (var i = 0; i < chips.length; i++) chips[i].classList.toggle("on", chips[i].dataset.at === t);
     if (t === "ov") renderOverview();
     else if (t === "us") loadUsers();
+    else if (t === "fb") loadFeedback();
     else renderTools();
   }
 
@@ -1220,7 +1454,12 @@
     return _progInput && _progInput.call(this, e);
   };
 
+  // screen-off mode is always on (the switch is gone from the menu)
+  try { localStorage.setItem("jmStream", "1"); } catch (e) {}
+  try { msEnabled = true; if (typeof streamLabel === "function") streamLabel(); } catch (e) {}
+
   mount();
+  try { var sb0 = document.getElementById("mSort"); if (sb0) sb0.innerHTML = "⇅ &nbsp; Sort: " + esc2(sortName()); } catch (e) {}
   var savedTheme = null;
   try { savedTheme = localStorage.getItem("jmThemeName"); } catch (e) {}
   if (!savedTheme) {
@@ -1243,7 +1482,7 @@
   });
   au.addEventListener("pause", msState);
   au.addEventListener("ended", msState);
-  window.__jmFeatures = "2.7";
-  dlog("add-on v2.7 loaded");
-  console.log("Jus Music features add-on v2.7 ready");
+  window.__jmFeatures = "2.8";
+  dlog("add-on v2.8 loaded");
+  console.log("Jus Music features add-on v2.8 ready");
 })();
