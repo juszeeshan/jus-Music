@@ -1,5 +1,5 @@
 /*
- * JUS MUSIC - FEATURES ADD-ON (v2.8)   file: jus-features.js
+ * JUS MUSIC - FEATURES ADD-ON (v2.9)   file: jus-features.js
  *
  * REPLACES the earlier jus-features.js (same file name, new content).
  *
@@ -327,6 +327,7 @@
     if (s && s.local) return playLocal(s);
     if (s && !s.online) {
       try { $("progress").disabled = false; } catch (e) {}
+      try { narrowTo(s); } catch (e) {}
       if (!seekRestarting) record(s);     // a reload for seeking is not a new play
     }
     return _play.apply(this, arguments);
@@ -420,9 +421,58 @@
     return { plays: jget("jmPlays_" + uname(), {}), last: last, favs: (typeof fav !== "undefined" && fav) ? fav : [] };
   }
 
+  /* ---------- keep the queue inside one culture ---------- */
+  var queueMode = "group";      // "group" = next songs come from the same folder/language, "list" = whatever is on screen
+  try { if (localStorage.getItem("jmQueueMode") === "list") queueMode = "list"; } catch (e) {}
+  var dispQueue = [];           // the list as shown on screen (before narrowing)
+
+  // songs that belong together: a known language first, else the Drive folder, else the genre
+  function groupKey(s) {
+    var l = String(s.language || "");
+    if (l && l !== "Other") return "l:" + l.toLowerCase();
+    var f = String(s.fl || "").trim();
+    if (f) return "f:" + f.toLowerCase();
+    var g = String(s.genre || "");
+    if (g && g !== "Other") return "g:" + g.toLowerCase();
+    return "o:other";
+  }
+  function groupLabel(s) {
+    var l = String(s.language || "");
+    if (l && l !== "Other") return l;
+    return String(s.fl || "").trim() || (s.genre && s.genre !== "Other" ? s.genre : "Other songs");
+  }
+  function viewingAll() { return folder === "All Songs" && plView === null && !q; }
+
+  // narrow `queue` to the group of `ref` (only when browsing All Songs)
+  function narrowTo(ref) {
+    if (queueMode !== "group" || !ref || ref.online || ref.local || !viewingAll()) return false;
+    var base = dispQueue.length ? dispQueue : queue, k = groupKey(ref);
+    var f = base.filter(function (x) { return groupKey(x) === k; });
+    if (f.length && f.some(function (x) { return x.id === ref.id; })) { queue = f; return true; }
+    return false;
+  }
+
+  function folderValid(f) {
+    if (f === "All Songs" || f === "♥ Favorites" || f === "Recent" || f === "🔒 Personal") return true;
+    return songs.some(function (x) { return x.language === f || x.genre === f; });
+  }
+
+  function queueLabel() {
+    var b = document.getElementById("mQueue");
+    if (b) b.innerHTML = "▶ &nbsp; Next song from: " + (queueMode === "group" ? "same folder / language" : "whole list");
+  }
+  function toggleQueueMode() {
+    queueMode = queueMode === "group" ? "list" : "group";
+    try { localStorage.setItem("jmQueueMode", queueMode); } catch (e) {}
+    queueLabel();
+    refresh();
+    toast(queueMode === "group" ? "Next songs now stay in the same folder / language" : "Next songs now come from the whole list");
+  }
+
   var _refresh = window.refresh;
   window.refresh = function () {
     var out;
+    try { if (songs && songs.length && !folderValid(folder)) folder = "All Songs"; } catch (e) {}
     try { closePortal(); } catch (e) {}
     try { cleanArtists(); } catch (e) {}
     if (!songs || !songs.length || sortMode === "added-asc") {
@@ -435,6 +485,14 @@
       try { out = _refresh.apply(this, arguments); }
       finally { songs.forEach(function (s, i) { s.added = saved[i]; }); }
     }
+    try {
+      dispQueue = queue.slice();
+      if (now && narrowTo(now) && queue.length < dispQueue.length) {
+        var tt = document.getElementById("songsTitle");
+        if (tt) tt.textContent += " · playing from " + groupLabel(now) + " (" + queue.length + ")";
+      }
+      if (plView === null) localStorage.setItem("jmFolder", folder);
+    } catch (e) {}
     try { augmentRows(); } catch (e) {}
     try { var pbar = document.getElementById("plBar"); if (pbar) pbar.classList.toggle("hide", plView === null); } catch (e) {}
     return out;
@@ -768,6 +826,7 @@
       mm.appendChild(mbtn("mThemePick", "🎨 &nbsp; Theme", openTheme));
       mm.appendChild(mbtn("mAdmin", "👑 &nbsp; Admin dashboard", openAdmin));
       mm.appendChild(mbtn("mSort", "⇅ &nbsp; Sort songs", openSort));
+      mm.appendChild(mbtn("mQueue", "▶ &nbsp; Next song from", toggleQueueMode));
       mm.appendChild(mbtn("mFeedback", "💬 &nbsp; Send feedback", openFeedback));
 
       var hide = function (id) { var e = document.getElementById(id); if (e) e.classList.add("hide"); };
@@ -794,7 +853,7 @@
       heading("Appearance");
       put(["mThemePick"]);
       heading("Player");
-      put(["sleepBtn"]);
+      put(["sleepBtn", "mQueue"]);
       heading("Account");
       put(["mAccount", "mFeedback", "mLogout"]);
       heading("Admin tools", true);
@@ -1459,6 +1518,11 @@
   try { msEnabled = true; if (typeof streamLabel === "function") streamLabel(); } catch (e) {}
 
   mount();
+  queueLabel();
+  try {
+    var lastFolder = localStorage.getItem("jmFolder");
+    if (lastFolder && typeof folder !== "undefined") folder = lastFolder;     // reopen where you left off
+  } catch (e) {}
   try { var sb0 = document.getElementById("mSort"); if (sb0) sb0.innerHTML = "⇅ &nbsp; Sort: " + esc2(sortName()); } catch (e) {}
   var savedTheme = null;
   try { savedTheme = localStorage.getItem("jmThemeName"); } catch (e) {}
@@ -1482,7 +1546,7 @@
   });
   au.addEventListener("pause", msState);
   au.addEventListener("ended", msState);
-  window.__jmFeatures = "2.8";
-  dlog("add-on v2.8 loaded");
-  console.log("Jus Music features add-on v2.8 ready");
+  window.__jmFeatures = "2.9";
+  dlog("add-on v2.9 loaded");
+  console.log("Jus Music features add-on v2.9 ready");
 })();
